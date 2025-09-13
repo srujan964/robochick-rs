@@ -5,7 +5,7 @@ mod types;
 pub mod config {
     use std::env;
 
-    #[derive(Clone)]
+    #[derive(Clone, Debug)]
     pub struct AppConfig {
         pub twitch_client_id: String,
         pub twitch_client_secret: String,
@@ -13,6 +13,7 @@ pub mod config {
         pub se_jwt: String,
         pub se_api_host: String,
         pub aws_session_token: String,
+        pub aws_parameter_store_host: String,
     }
 
     impl AppConfig {
@@ -30,6 +31,15 @@ pub mod config {
                 se_api_host: env::var("SE_API_HOST").expect("Missing SE_API_HOST env var"),
                 aws_session_token: env::var("AWS_SESSION_TOKEN")
                     .expect("Missing AWS_SESSION_TOKEN env var"),
+                aws_parameter_store_host: env::var("AWS_PARAMETER_STORE_HOST")
+                    .expect("Missing AWS_PARAMETER_STORE_HOST env var"),
+            }
+        }
+
+        pub(crate) fn with_aws_parameter_store_host(&self, new: String) -> Self {
+            AppConfig {
+                aws_parameter_store_host: new.clone(),
+                ..self.clone()
             }
         }
     }
@@ -57,6 +67,8 @@ mod tests {
         assert_eq!(result.twitch_eventsub_subscription_secret, "chickencoop");
         assert_eq!(result.twitch_client_secret, "0123456789");
         assert_eq!(result.twitch_client_id, "client-id");
+        assert_eq!(result.aws_session_token, "aws-token-value");
+        assert_eq!(result.aws_parameter_store_host, "http://localhost");
 
         Ok(())
     }
