@@ -1,0 +1,31 @@
+{
+    "scenarios": [
+        {
+            "template": "{win_1} ran towards the falling cracker and tripped over a sneak tripwire. {other_1} ",
+            "winners": [
+                "win_1"
+            ],
+            "others": [
+                "other_1"
+            ]
+        },
+        {
+            "template": "Anna's feeling benevolent this time, all the mods get a dry cracker each!",
+            "winners": [],
+            "others": []
+        },
+        {
+            "template": "{win_1} was on guard duty while the others slept. They were the only one who saw the food drop in and sneaked it into their coat, unbeknownst to the others.",
+            "winners": [
+                "win_1"
+            ],
+            "others": []
+        }
+    ],
+    "mods": [
+        "John",
+        "Jane",
+        "Alex",
+        "Krish"
+    ]
+}

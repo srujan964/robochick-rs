@@ -1,0 +1,21 @@
+[package]
+name = "robochick-rs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.99"
+fastrand = "2.3.0"
+hex = "0.4.3"
+lambda_http = "0.17.0"
+reqwest = { version = "0.12.23", features = ["json"] } 
+serde = { version = "1.0.219", features = ["derive"] } 
+serde_json = "1.0.143"
+strfmt = "0.2.5"
+strum = "0.27.2"
+tokio = { version =  "1.47.1", features = ["macros", "rt", "rt-multi-thread"] }
+
+[dev-dependencies]
+dotenvy = "0.15.7"
+mockall = "0.13.1"
+mockito = "1.7.0"
