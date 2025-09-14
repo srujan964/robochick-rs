@@ -21,8 +21,8 @@ struct MessageRequest {
     message: String,
 }
 
-trait ParameterStoreCaller {
-    async fn get<T: DeserializeOwned>(
+pub trait ParameterStoreCaller {
+    async fn get<T: DeserializeOwned + 'static>(
         &self,
         path: String,
         params: Vec<(String, String)>,
@@ -30,7 +30,7 @@ trait ParameterStoreCaller {
     ) -> Result<T>;
 }
 
-trait StreamelementsCaller {
+pub trait StreamelementsCaller {
     async fn say(&self, msg: String, config: &AppConfig) -> Result<String>;
 }
 

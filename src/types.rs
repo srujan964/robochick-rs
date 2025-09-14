@@ -1,5 +1,24 @@
 pub mod twitch {
     use serde::{Deserialize, Serialize};
+    use strum::{AsRefStr};
+
+    #[derive(Debug, AsRefStr)]
+    pub enum EventsubHeader {
+        #[strum(serialize = "Twitch-Eventsub-Message-Id")]
+        MessageId,
+        #[strum(serialize = "Twitch-Eventsub-Message-Retry")]
+        MessageRetry,
+        #[strum(serialize = "Twitch-Eventsub-Message-Type")]
+        MessageType,
+        #[strum(serialize = "Twitch-Eventsub-Message-Signature")]
+        MessageSignature,
+        #[strum(serialize = "Twitch-Eventsub-Message-Timestamp")]
+        MessageTimestamp,
+        #[strum(serialize = "Twitch-Eventsub-Subscription-Type")]
+        SubscriptionType,
+        #[strum(serialize = "Twitch-Eventsub-Subscription-Version")]
+        SubscriptionVersion
+    }
 
     #[derive(Serialize, Deserialize, Debug)]
     pub struct RewardRedemptionEvent {
