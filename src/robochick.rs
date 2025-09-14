@@ -1,17 +1,16 @@
 pub mod twitch {
-    use std::{collections::HashMap, error, fmt, iter::zip};
+    use std::{collections::HashMap, error, fmt, iter::zip, vec};
 
-    use anyhow::Result;
     use fastrand::Rng;
     use serde::{Deserialize, Serialize};
 
-    #[derive(Serialize, Deserialize, Debug)]
+    #[derive(Serialize, Deserialize, Debug, Clone)]
     pub struct MessageComponents {
         pub(crate) scenarios: Vec<Scenario>,
         pub(crate) mods: Vec<String>,
     }
 
-    #[derive(Serialize, Deserialize, Debug)]
+    #[derive(Serialize, Deserialize, Debug, Clone)]
     pub struct Scenario {
         pub(crate) template: String,
         pub(crate) winners: Vec<String>,
@@ -22,6 +21,7 @@ pub mod twitch {
     pub enum ScenarioError {
         NotEnoughPlaceholders(String),
         InvalidValue(String),
+        PickFailed(String),
     }
 
     impl fmt::Display for ScenarioError {
@@ -29,6 +29,7 @@ pub mod twitch {
             match self {
                 ScenarioError::InvalidValue(s) => write!(f, "InvalidValue({s})"),
                 ScenarioError::NotEnoughPlaceholders(s) => write!(f, "NotEnoughPlaceholders({s})"),
+                ScenarioError::PickFailed(s) => write!(f, "PickFailed({s})"),
             }
         }
     }
@@ -97,12 +98,57 @@ pub mod twitch {
         }
     }
 
-    pub fn pick_random(mods: &[String], n: usize, rng: &mut Rng) -> Vec<String> {
-        if n == 0 {
+    pub trait MessageBuilder {
+        fn build_from_templates(
+            message_components: &MessageComponents,
+            rng: &mut Rng,
+        ) -> Result<String, ScenarioError>;
+    }
+
+    pub struct Robochick {}
+
+    impl Robochick {
+        pub fn new() -> Robochick {
+            Robochick {}
+        }
+    }
+
+    impl MessageBuilder for Robochick {
+        fn build_from_templates(
+            message_components: &MessageComponents,
+            rng: &mut Rng,
+        ) -> Result<String, ScenarioError> {
+            let mods: &[String] = message_components.get_mods();
+            let scenarios: &[Scenario] = message_components.get_scenarios();
+
+            if let Some(scenario_pick) = pick_random(scenarios, 1, rng).pop() {
+                let m = scenario_pick.get_template().len();
+                let n = scenario_pick.get_others().len();
+
+                let winners = pick_random(mods, m, rng);
+                let others = pick_random(mods, n, rng);
+                scenario_pick.build(&winners, &others)
+            } else {
+                Err(ScenarioError::PickFailed(
+                    "Failed to select a scenario".into(),
+                ))
+            }
+        }
+    }
+
+    fn pick_random<T: Clone>(haystack: &[T], amount: usize, rng: &mut Rng) -> Vec<T> {
+        if haystack.is_empty() || amount == 0 {
             return vec![];
         }
 
-        rng.choose_multiple(mods, n)
+        if amount == 1 {
+            return match rng.choice(haystack) {
+                Some(pick) => vec![pick.clone()],
+                None => vec![],
+            };
+        }
+
+        rng.choose_multiple(haystack, amount)
             .iter()
             .cloned()
             .cloned()
@@ -114,7 +160,9 @@ pub mod twitch {
         use anyhow::Result;
         use fastrand::Rng;
 
-        use crate::robochick::twitch::{Scenario, pick_random};
+        use crate::robochick::twitch::{
+            MessageBuilder, MessageComponents, Robochick, Scenario, pick_random,
+        };
 
         #[test]
         fn pick_random_chooses_a_single_random_moderator() -> Result<()> {
@@ -153,6 +201,15 @@ pub mod twitch {
             let mut rng = Rng::with_seed(1_000);
 
             let result = pick_random(&mods, 0, &mut rng);
+
+            assert!(result.is_empty());
+            Ok(())
+        }
+
+        #[test]
+        fn pick_random_returns_empty_vec_if_picking_any_amount_from_an_empty_list() -> Result<()> {
+            let mut rng = Rng::with_seed(1_000);
+            let result = pick_random::<String>(&vec![], 1, &mut rng);
 
             assert!(result.is_empty());
             Ok(())
@@ -207,6 +264,39 @@ pub mod twitch {
             let result = scenario.build(&winners, &others);
 
             assert!(result.is_err());
+            Ok(())
+        }
+
+        #[test]
+        fn build_from_templates_should_return_a_built_scenario_message() -> Result<()> {
+            let scenarios: Vec<Scenario> = vec![Scenario {
+                template: "{placeholder} wins by default.".into(),
+                winners: vec!["placeholder".into()],
+                others: vec![],
+            }];
+            let mods: Vec<String> = vec!["John".into()];
+            let message_components = MessageComponents { scenarios, mods };
+            let mut rng = Rng::with_seed(1);
+
+            let msg = Robochick::build_from_templates(&message_components, &mut rng)?;
+
+            assert_eq!(msg, "John wins by default.");
+            Ok(())
+        }
+
+        #[test]
+        fn build_from_templates_should_return_err_if_message_components_has_no_scenarios()
+        -> Result<()> {
+            let mods: Vec<String> = vec!["John".into()];
+            let message_components = MessageComponents {
+                scenarios: vec![],
+                mods,
+            };
+            let mut rng = Rng::with_seed(1);
+
+            let result = Robochick::build_from_templates(&message_components, &mut rng);
+            assert!(result.is_err());
+
             Ok(())
         }
     }
