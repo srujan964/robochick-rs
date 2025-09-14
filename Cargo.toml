@@ -19,3 +19,7 @@ tokio = { version =  "1.47.1", features = ["macros", "rt", "rt-multi-thread"] }
 dotenvy = "0.15.7"
 mockall = "0.13.1"
 mockito = "1.7.0"
+
+[lints.rust]
+unused = "allow"
+unsafe_code = "forbid"
