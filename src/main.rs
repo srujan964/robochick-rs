@@ -10,6 +10,7 @@ pub mod config {
         pub twitch_client_id: String,
         pub twitch_client_secret: String,
         pub twitch_eventsub_subscription_secret: String,
+        pub twitch_channel_id: String,
         pub se_jwt: String,
         pub se_api_host: String,
         pub aws_session_token: String,
@@ -27,6 +28,8 @@ pub mod config {
                     "TWITCH_EVENTSUB_SUBSCRIPTION_SECRET",
                 )
                 .expect("Missing TWITCH_EVENTSUB_SUBSCRIPTION_SECRET env var"),
+                twitch_channel_id: env::var("TWITCH_CHANNEL_ID")
+                    .expect("Missing TWITCH_CHANNEL_ID env var"),
                 se_jwt: env::var("SE_JWT").expect("Missing SE_JWT env var"),
                 se_api_host: env::var("SE_API_HOST").expect("Missing SE_API_HOST env var"),
                 aws_session_token: env::var("AWS_SESSION_TOKEN")
@@ -39,6 +42,13 @@ pub mod config {
         pub(crate) fn with_aws_parameter_store_host(&self, new: String) -> Self {
             AppConfig {
                 aws_parameter_store_host: new.clone(),
+                ..self.clone()
+            }
+        }
+
+        pub(crate) fn with_se_api_host(&self, new: String) -> Self {
+            AppConfig {
+                se_api_host: new.clone(),
                 ..self.clone()
             }
         }
