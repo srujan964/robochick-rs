@@ -1,9 +1,10 @@
 pub mod event_handler {
     use anyhow::{Result, anyhow};
     use axum::http::HeaderMap;
+    use hex::decode;
     use hmac::{Hmac, Mac};
     use lambda_http::{Body, Response};
-    use reqwest::StatusCode;
+    use reqwest::{StatusCode, header};
     use sha2::Sha256;
 
     use crate::{
@@ -23,33 +24,44 @@ pub mod event_handler {
             EventHandler { caller }
         }
 
-        fn verify(&self, payload: String, headers: &HeaderMap, config: &AppConfig) -> bool {
-            let message_id = headers
-                .get(EventsubHeader::MessageId.as_ref())
-                .unwrap()
-                .to_str()
-                .unwrap();
+        fn verify(&self, payload: String, headers: &HeaderMap, config: &AppConfig) -> Result<()> {
+            if let (Some(message_id), Some(timestamp), Some(signature_val)) = (
+                headers.get(EventsubHeader::MessageId.as_ref()),
+                headers.get(EventsubHeader::MessageTimestamp.as_ref()),
+                headers.get(EventsubHeader::MessageSignature.as_ref()),
+            ) {
+                if let (Ok(message_id_val), Ok(timestamp_val), Ok(signature_val)) = (
+                    message_id.to_str(),
+                    timestamp.to_str(),
+                    signature_val.to_str(),
+                ) {
+                    let input = format!("{}{}{}", message_id_val, timestamp_val, payload);
 
-            let timestamp = headers
-                .get(EventsubHeader::MessageTimestamp.as_ref())
-                .unwrap()
-                .to_str()
-                .unwrap();
+                    let key = config.twitch_eventsub_subscription_secret.as_bytes();
+                    let mut hmac = HmacSha256::new_from_slice(key)?;
+                    hmac.update(input.as_bytes());
 
-            let signature_val = headers
-                .get(EventsubHeader::MessageSignature.as_ref())
-                .unwrap()
-                .to_str()
-                .unwrap();
+                    let signature = match String::from(signature_val).strip_prefix("sha256=") {
+                        Some(s) => hex::decode(s)?,
+                        None => {
+                            return Err(anyhow!(
+                                "Failed to strip `sha256=` prefix from signature header"
+                            ));
+                        }
+                    };
 
-            let plaintext = format!("{}{}{}", message_id, timestamp, payload);
-
-            let key = config.twitch_eventsub_subscription_secret.as_bytes();
-            let hmac = HmacSha256::new_from_slice(key).unwrap();
-
-            let signature = String::from(signature_val).strip_prefix("sha256=").unwrap();
-
-            hmac.verify_slice(signature_val.as_bytes()).is_err()
+                    match hmac.verify_slice(&signature[..]) {
+                        Ok(_) => Ok(()),
+                        Err(e) => Err(anyhow!("Signature verification failed: {e}")),
+                    }
+                } else {
+                    Err(anyhow!("Failed to parse headers to strings"))
+                }
+            } else {
+                Err(anyhow!(
+                    "Missing one of these headers: Message-Id, Message-Timestamp, Message-Signature"
+                ))
+            }
         }
     }
 
@@ -84,7 +96,7 @@ pub mod event_handler {
         }
 
         #[test]
-        fn handle_should_process_a_verification_event() -> Result<()> {
+        fn verify_returns_true_for_valid_event() -> Result<()> {
             dotenv()?;
             let config = AppConfig::from_env();
             let message_id = "message-1";
@@ -118,7 +130,69 @@ pub mod event_handler {
 
             let result = event_handler.verify(payload.to_string(), &headers, &config);
 
-            assert!(result);
+            dbg!(&result);
+            assert!(result.is_ok());
+            Ok(())
+        }
+
+        #[test]
+        fn verify_returns_false_for_missing_header() -> Result<()> {
+            dotenv()?;
+            let config = AppConfig::from_env();
+            let timestamp = "2025-09-14T00:00:00.123456789";
+            let payload = r#"{"message":"Hello, World!"}"#;
+
+            let input = format!("{}{}", timestamp.to_string(), payload.to_string());
+            let signature = generate_hmac(&input, &config.twitch_eventsub_subscription_secret)?;
+
+            let mut headers_without_msg_id = HeaderMap::new();
+            headers_without_msg_id.append(
+                twitch::EventsubHeader::MessageTimestamp.as_ref(),
+                timestamp.parse().unwrap(),
+            );
+            headers_without_msg_id.append(
+                twitch::EventsubHeader::MessageSignature.as_ref(),
+                signature.parse().unwrap(),
+            );
+
+            let mock_caller = MockCaller::new();
+            let event_handler = EventHandler::new(mock_caller);
+
+            let result =
+                event_handler.verify(payload.to_string(), &headers_without_msg_id, &config);
+
+            assert!(result.is_err());
+            Ok(())
+        }
+
+
+        #[test]
+        fn verify_returns_false_for_incorrect_signature() -> Result<()> {
+            dotenv()?;
+            let config = AppConfig::from_env();
+            let timestamp = "2025-09-14T00:00:00.123456789";
+            let payload = r#"{"message":"Hello, World!"}"#;
+
+            let input = format!("{}{}", timestamp.to_string(), payload.to_string());
+            let signature = hex::encode("random data");
+
+            let mut headers_without_msg_id = HeaderMap::new();
+            headers_without_msg_id.append(
+                twitch::EventsubHeader::MessageTimestamp.as_ref(),
+                timestamp.parse().unwrap(),
+            );
+            headers_without_msg_id.append(
+                twitch::EventsubHeader::MessageSignature.as_ref(),
+                signature.parse().unwrap(),
+            );
+
+            let mock_caller = MockCaller::new();
+            let event_handler = EventHandler::new(mock_caller);
+
+            let result =
+                event_handler.verify(payload.to_string(), &headers_without_msg_id, &config);
+
+            assert!(result.is_err());
             Ok(())
         }
 

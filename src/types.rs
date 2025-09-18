@@ -1,6 +1,6 @@
 pub mod twitch {
     use serde::{Deserialize, Serialize};
-    use strum::{AsRefStr};
+    use strum::AsRefStr;
 
     #[derive(Debug, AsRefStr)]
     pub enum EventsubHeader {
@@ -17,7 +17,7 @@ pub mod twitch {
         #[strum(serialize = "Twitch-Eventsub-Subscription-Type")]
         SubscriptionType,
         #[strum(serialize = "Twitch-Eventsub-Subscription-Version")]
-        SubscriptionVersion
+        SubscriptionVersion,
     }
 
     #[derive(Serialize, Deserialize, Debug)]
