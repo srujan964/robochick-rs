@@ -20,10 +20,16 @@ pub mod twitch {
         SubscriptionVersion,
     }
 
+    #[derive(Debug, AsRefStr)]
+    pub enum MessageType {
+        #[strum(serialize = "webhook_callback_verification")]
+        WebhookCallbackVerification,
+    }
+
     #[derive(Serialize, Deserialize, Debug)]
     pub struct RewardRedemptionEvent {
         pub(crate) subscription: Subscription,
-        pub(crate) event: Event,
+        pub(crate) event: RewardEvent,
     }
 
     #[derive(Serialize, Deserialize, Debug)]
@@ -39,7 +45,7 @@ pub mod twitch {
     }
 
     #[derive(Serialize, Deserialize, Debug)]
-    pub struct Event {
+    pub struct RewardEvent {
         id: String,
         broadcaster_user_id: String,
         broadcaster_user_login: String,
@@ -71,5 +77,40 @@ pub mod twitch {
         title: String,
         cost: u16,
         prompt: String,
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    pub struct SubscriptionVerficationEvent {
+        challenge: String,
+        subscription: VerifySubscriptionDetails,
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    struct VerifySubscriptionDetails {
+        id: String,
+        status: String,
+        r#type: String,
+        version: String,
+        cost: u32,
+        condition: VerifyConditionDetails,
+        transport: VerifyTransportDetails,
+        created_at: String,
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    struct VerifyConditionDetails {
+        broadcaster_user_id: String,
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    struct VerifyTransportDetails {
+        method: String,
+        callback: String,
+    }
+
+    impl SubscriptionVerficationEvent {
+        pub fn challenge(&self) -> &str {
+            &self.challenge
+        }
     }
 }
