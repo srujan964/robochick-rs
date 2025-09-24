@@ -39,7 +39,7 @@ pub mod twitch {
         version: String,
         status: String,
         cost: u16,
-        condition: SubscriptionCondition,
+        condition: SubCondition,
         transport: SubscriptionTransport,
         created_at: String,
     }
@@ -60,7 +60,7 @@ pub mod twitch {
     }
 
     #[derive(Serialize, Deserialize, Debug)]
-    pub struct SubscriptionCondition {
+    pub struct SubCondition {
         broadcaster_user_id: String,
         reward_id: String,
     }
@@ -80,35 +80,35 @@ pub mod twitch {
     }
 
     #[derive(Serialize, Deserialize, Debug)]
-    pub struct SubscriptionVerficationEvent {
+    pub struct VerificationEvent {
         challenge: String,
-        subscription: VerifySubscriptionDetails,
+        subscription: SubInfo,
     }
 
     #[derive(Serialize, Deserialize, Debug)]
-    struct VerifySubscriptionDetails {
+    struct SubInfo {
         id: String,
         status: String,
         r#type: String,
         version: String,
         cost: u32,
-        condition: VerifyConditionDetails,
-        transport: VerifyTransportDetails,
+        condition: ConditionInfo,
+        transport: TransportInfo,
         created_at: String,
     }
 
     #[derive(Serialize, Deserialize, Debug)]
-    struct VerifyConditionDetails {
+    struct ConditionInfo {
         broadcaster_user_id: String,
     }
 
     #[derive(Serialize, Deserialize, Debug)]
-    struct VerifyTransportDetails {
+    struct TransportInfo {
         method: String,
         callback: String,
     }
 
-    impl SubscriptionVerficationEvent {
+    impl VerificationEvent {
         pub fn challenge(&self) -> &str {
             &self.challenge
         }

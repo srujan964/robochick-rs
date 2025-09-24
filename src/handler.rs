@@ -14,7 +14,7 @@ pub mod event_handler {
     use crate::{
         client::{ParameterStoreCaller, StreamelementsCaller},
         config::AppConfig,
-        types::twitch::{EventsubHeader, MessageType, SubscriptionVerficationEvent},
+        types::twitch::{EventsubHeader, MessageType, VerificationEvent},
     };
 
     type HmacSha256 = Hmac<Sha256>;
@@ -34,7 +34,7 @@ pub mod event_handler {
             config: &AppConfig,
         ) -> Result<String> {
             let challenge_event =
-                match serde_json::from_str::<SubscriptionVerficationEvent>(&payload) {
+                match serde_json::from_str::<VerificationEvent>(&payload) {
                     Ok(val) => val,
                     Err(_) => {
                         return Err(anyhow!("Failed to deserialize payload to serde json value"));
