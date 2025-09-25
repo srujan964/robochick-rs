@@ -1,6 +1,6 @@
 pub mod twitch {
     use serde::{Deserialize, Serialize};
-    use strum::AsRefStr;
+    use strum::{AsRefStr, EnumString};
 
     #[derive(Debug, AsRefStr)]
     pub enum EventsubHeader {
@@ -20,10 +20,14 @@ pub mod twitch {
         SubscriptionVersion,
     }
 
-    #[derive(Debug, AsRefStr)]
+    #[derive(Debug, AsRefStr, EnumString)]
     pub enum MessageType {
         #[strum(serialize = "webhook_callback_verification")]
         WebhookCallbackVerification,
+        #[strum(serialize = "notification")]
+        Notification,
+        #[strum(serialize = "revocation")]
+        Revocation,
     }
 
     #[derive(Serialize, Deserialize, Debug)]

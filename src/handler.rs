@@ -1,4 +1,6 @@
 pub mod event_handler {
+    use std::str::FromStr;
+
     use anyhow::{Result, anyhow};
     use axum::http::{HeaderMap, HeaderName};
     use hex::decode;
@@ -29,22 +31,35 @@ pub mod event_handler {
         }
 
         fn handle_challenge(
-            payload: String,
+            payload: &str,
             headers: &HeaderMap,
             config: &AppConfig,
         ) -> Result<String> {
-            let challenge_event =
-                match serde_json::from_str::<VerificationEvent>(&payload) {
-                    Ok(val) => val,
-                    Err(_) => {
-                        return Err(anyhow!("Failed to deserialize payload to serde json value"));
-                    }
-                };
+            let challenge_event = match serde_json::from_str::<VerificationEvent>(payload) {
+                Ok(val) => val,
+                Err(_) => {
+                    return Err(anyhow!(
+                        "Failed to deserialize payload to a VerificationEvent"
+                    ));
+                }
+            };
 
             Ok(challenge_event.challenge().to_string())
         }
 
-        pub fn handle(
+        fn handle_revocation(payload: &str, headers: &HeaderMap, config: &AppConfig) -> () {
+            unimplemented!()
+        }
+
+        async fn handle_notification(
+            payload: &str,
+            headers: &HeaderMap,
+            config: &AppConfig,
+        ) -> Result<String> {
+            Ok("".to_string())
+        }
+
+        pub async fn handle(
             &self,
             request: String,
             headers: &HeaderMap,
@@ -60,7 +75,7 @@ pub mod event_handler {
                 return Ok(resp);
             }
 
-            let msg_type = match headers.get(EventsubHeader::MessageType.as_ref()) {
+            let message_type_val = match headers.get(EventsubHeader::MessageType.as_ref()) {
                 Some(x) => match x.to_str() {
                     Ok(s) => s,
                     Err(_) => {
@@ -72,27 +87,54 @@ pub mod event_handler {
                 None => return Err(anyhow!("Missing MessageType header")),
             };
 
-            let resp: Response<Body>;
+            let message_type = match MessageType::from_str(message_type_val) {
+                Ok(s) => s,
+                Err(_) => return Err(anyhow!("Invalid MessageType received")),
+            };
 
-            if msg_type == MessageType::WebhookCallbackVerification.as_ref() {
-                match EventHandler::<T>::handle_challenge(request, headers, config) {
-                    Ok(challenge) => {
-                        resp = Response::builder()
+            let resp: Response<Body> = match message_type {
+                MessageType::WebhookCallbackVerification => {
+                    if let Ok(challenge) =
+                        EventHandler::<T>::handle_challenge(&request, headers, config)
+                    {
+                        Response::builder()
                             .status(StatusCode::OK)
                             .header(CONTENT_TYPE, "text/plain")
                             .body(Body::from(challenge))
-                            .map_err(Box::new)?;
-                    }
-                    Err(_) => {
-                        resp = Response::builder()
-                            .status(StatusCode::FORBIDDEN)
+                            .map_err(Box::new)?
+                    } else {
+                        Response::builder()
+                            .status(StatusCode::BAD_REQUEST)
                             .body(Body::Empty)
-                            .map_err(Box::new)?;
+                            .map_err(Box::new)?
                     }
                 }
-            } else {
-                resp = Response::builder().body(Body::Empty).map_err(Box::new)?;
-            }
+
+                MessageType::Notification => {
+                    if EventHandler::<T>::handle_notification(&request, headers, config)
+                        .await
+                        .is_ok()
+                    {
+                        Response::builder()
+                            .status(StatusCode::OK)
+                            .body(Body::Empty)
+                            .map_err(Box::new)?
+                    } else {
+                        Response::builder()
+                            .status(StatusCode::BAD_REQUEST)
+                            .body(Body::Empty)
+                            .map_err(Box::new)?
+                    }
+                }
+                MessageType::Revocation => {
+                    EventHandler::<T>::handle_revocation(&request, headers, config);
+
+                    Response::builder()
+                        .status(StatusCode::OK)
+                        .body(Body::Empty)
+                        .map_err(Box::new)?
+                }
+            };
 
             Ok(resp)
         }
@@ -275,8 +317,8 @@ pub mod event_handler {
             Ok(())
         }
 
-        #[test]
-        fn handle_returns_challenge_string_in_plaintext() -> Result<()> {
+        #[tokio::test]
+        async fn handle_returns_challenge_string_in_plaintext() -> Result<()> {
             dotenv()?;
             let config = AppConfig::from_env();
             let message_id = "message-1";
@@ -320,8 +362,9 @@ pub mod event_handler {
             let mock_caller = MockCaller::new();
             let event_handler = EventHandler::new(mock_caller);
 
-            let response: Response<Body> =
-                event_handler.handle(payload.to_string(), &headers, &config)?;
+            let response: Response<Body> = event_handler
+                .handle(payload.to_string(), &headers, &config)
+                .await?;
 
             assert_eq!(StatusCode::OK, response.status());
             assert_eq!("text/plain", response.headers().get(CONTENT_TYPE).unwrap());
