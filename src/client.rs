@@ -56,10 +56,9 @@ impl StreamelementsCaller for WebClient {
             .await
         {
             if resp.status().is_success() {
-                match resp.text().await {
-                    Ok(text) => Ok(text),
-                    Err(_) => Err(anyhow!("Failed to read response body")),
-                }
+                resp.text()
+                    .await
+                    .map_err(|e| anyhow!("Failed to read response body"))
             } else {
                 Err(anyhow!(
                     "Streamelemenst API returned error with status: {}",
