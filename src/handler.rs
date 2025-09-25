@@ -16,7 +16,7 @@ pub mod event_handler {
     use crate::{
         client::{ParameterStoreCaller, StreamelementsCaller},
         config::AppConfig,
-        types::twitch::{EventsubHeader, MessageType, VerificationEvent},
+        types::twitch::{EventsubHeader, MessageType, RevocationEvent, VerificationEvent},
     };
 
     type HmacSha256 = Hmac<Sha256>;
@@ -47,8 +47,16 @@ pub mod event_handler {
             Ok(challenge_event.challenge().to_string())
         }
 
-        fn handle_revocation(payload: &str, headers: &HeaderMap, config: &AppConfig) -> () {
-            unimplemented!()
+        fn handle_revocation(payload: &str, headers: &HeaderMap, config: &AppConfig) {
+            if let Ok(event) = serde_json::from_str::<RevocationEvent>(payload) {
+                println!(
+                    "Subscription revoked for {} with reason: {}",
+                    event.subscription_type(),
+                    event.subscription_status()
+                );
+            } else {
+                println!("Failed to parse payload");
+            }
         }
 
         async fn handle_notification(
@@ -130,7 +138,7 @@ pub mod event_handler {
                     EventHandler::<T>::handle_revocation(&request, headers, config);
 
                     Response::builder()
-                        .status(StatusCode::OK)
+                        .status(StatusCode::NO_CONTENT)
                         .body(Body::Empty)
                         .map_err(Box::new)?
                 }
@@ -375,6 +383,54 @@ pub mod event_handler {
                 Body::Empty => panic!(),
             }
 
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn handle_returns_204_for_subscription_revocation() -> Result<()> {
+            dotenv()?;
+            let config = AppConfig::from_env();
+            let message_id = "message-1";
+            let timestamp = "2025-09-14T00:00:00.123456789";
+
+            let mut payload_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            payload_path.push("resources/tests/subscription_revoked.json");
+            let payload = std::fs::read_to_string(payload_path)?;
+
+            let input = format!(
+                "{}{}{}",
+                message_id.to_string(),
+                timestamp.to_string(),
+                payload.to_string()
+            );
+            let signature = generate_hmac(&input, &config.twitch_eventsub_subscription_secret)?;
+
+            let mut headers = HeaderMap::new();
+            headers.append(
+                twitch::EventsubHeader::MessageId.as_ref(),
+                message_id.parse().unwrap(),
+            );
+            headers.append(
+                twitch::EventsubHeader::MessageTimestamp.as_ref(),
+                timestamp.parse().unwrap(),
+            );
+            headers.append(
+                twitch::EventsubHeader::MessageSignature.as_ref(),
+                signature.parse().unwrap(),
+            );
+            headers.append(
+                twitch::EventsubHeader::MessageType.as_ref(),
+                twitch::MessageType::Revocation.as_ref().parse().unwrap(),
+            );
+
+            let mock_caller = MockCaller::new();
+            let event_handler = EventHandler::new(mock_caller);
+
+            let response: Response<Body> = event_handler
+                .handle(payload.to_string(), &headers, &config)
+                .await?;
+
+            assert_eq!(StatusCode::NO_CONTENT, response.status());
             Ok(())
         }
 

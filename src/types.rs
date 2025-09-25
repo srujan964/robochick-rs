@@ -1,4 +1,6 @@
 pub mod twitch {
+    use std::fmt::Display;
+
     use serde::{Deserialize, Serialize};
     use strum::{AsRefStr, EnumString};
 
@@ -87,6 +89,21 @@ pub mod twitch {
     pub struct VerificationEvent {
         challenge: String,
         subscription: Subscription,
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    pub struct RevocationEvent {
+        subscription: Subscription,
+    }
+
+    impl RevocationEvent {
+        pub fn subscription_type(&self) -> &str {
+            &self.subscription.r#type
+        }
+
+        pub fn subscription_status(&self) -> &str {
+            &self.subscription.status
+        }
     }
 
     impl VerificationEvent {
