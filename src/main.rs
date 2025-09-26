@@ -6,7 +6,7 @@ mod types;
 pub mod config {
     use std::env;
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone, PartialEq, Debug)]
     pub struct AppConfig {
         pub twitch_client_id: String,
         pub twitch_client_secret: String,
@@ -16,6 +16,8 @@ pub mod config {
         pub se_api_host: String,
         pub aws_session_token: String,
         pub aws_parameter_store_host: String,
+        pub feed_mods_rewards_id: String,
+        pub broadcaster_user_id: String,
     }
 
     impl AppConfig {
@@ -37,6 +39,10 @@ pub mod config {
                     .expect("Missing AWS_SESSION_TOKEN env var"),
                 aws_parameter_store_host: env::var("AWS_PARAMETER_STORE_HOST")
                     .expect("Missing AWS_PARAMETER_STORE_HOST env var"),
+                feed_mods_rewards_id: env::var("FEED_MODS_REWARD_ID")
+                    .expect("Missing FEED_MODS_REWARD_ID env var"),
+                broadcaster_user_id: env::var("BROADCASTER_USER_ID")
+                    .expect("Missing BROADCASTER_USER_ID env var"),
             }
         }
 

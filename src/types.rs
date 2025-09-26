@@ -32,10 +32,26 @@ pub mod twitch {
         Revocation,
     }
 
+    #[derive(Debug, AsRefStr, EnumString)]
+    pub enum SubscriptionType {
+        #[strum(serialize = "channel.channel_points_custom_reward_redemption.add")]
+        CustomRewardRedemption,
+    }
+
     #[derive(Serialize, Deserialize, Debug)]
-    pub struct RewardRedemptionEvent {
+    pub struct RewardRedeemed {
         pub(crate) subscription: Subscription,
         pub(crate) event: RewardEvent,
+    }
+
+    impl RewardRedeemed {
+        pub fn broadcaster_user_id(&self) -> &str {
+            &self.event.broadcaster_user_id
+        }
+
+        pub fn reward_id(&self) -> &str {
+            &self.event.reward.id
+        }
     }
 
     #[derive(Serialize, Deserialize, Debug)]

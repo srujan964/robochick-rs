@@ -14,6 +14,8 @@ jobs:
         echo TWITCH_CHANNEL_ID="example_channel_id" >> .env
         echo SE_API_HOST="http://localhost:3000/streamelements/" >> .env
         echo AWS_PARAMETER_STORE_HOST="http://localhost" >> .env
+        echo FEED_MODS_REWARD_ID="92af127c-7326-4483-a52b-b0da0be61c01" >> .env
+        echo BROADCASTER_USER_ID=1337 >> .env
     - name: Build
       run: cargo build
     - name: Run tests

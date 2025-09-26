@@ -3,9 +3,10 @@ pub mod event_handler {
 
     use anyhow::{Result, anyhow};
     use axum::http::{HeaderMap, HeaderName};
+    use fastrand::Rng;
     use hex::decode;
     use hmac::{Hmac, Mac};
-    use lambda_http::{Body, Response};
+    use lambda_http::{Body, Response, tracing};
     use reqwest::{
         StatusCode,
         header::{self, CONTENT_TYPE},
@@ -16,7 +17,11 @@ pub mod event_handler {
     use crate::{
         client::{ParameterStoreCaller, StreamelementsCaller},
         config::AppConfig,
-        types::twitch::{EventsubHeader, MessageType, RevocationEvent, VerificationEvent},
+        robochick::twitch::{MessageBuilder, MessageComponents, Robochick},
+        types::twitch::{
+            EventsubHeader, MessageType, RevocationEvent, RewardRedeemed, SubscriptionType,
+            VerificationEvent,
+        },
     };
 
     type HmacSha256 = Hmac<Sha256>;
@@ -60,11 +65,83 @@ pub mod event_handler {
         }
 
         async fn handle_notification(
+            &self,
             payload: &str,
             headers: &HeaderMap,
             config: &AppConfig,
-        ) -> Result<String> {
-            Ok("".to_string())
+        ) -> Result<()> {
+            if let Some(header) = headers.get(EventsubHeader::SubscriptionType.as_ref()) {
+                if header
+                    .to_str()
+                    .map(SubscriptionType::from_str)
+                    .is_err()
+                {
+                    return Err(anyhow!("Unknown Subscription-Type header: {:?}", header));
+                }
+
+                let event = match serde_json::from_str::<RewardRedeemed>(payload) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        println!("Failed to deserialize event to RewardRedeemed type: {e}");
+                        return Err(anyhow!("{e}"));
+                    }
+                };
+
+                if event.broadcaster_user_id() != config.broadcaster_user_id
+                    || event.reward_id() != config.feed_mods_rewards_id
+                {
+                    println!(
+                        "Invalid notification: unknown broadcaster user id {} or reward id {}",
+                        event.broadcaster_user_id(),
+                        event.reward_id(),
+                    );
+                    return Err(anyhow!("Unknown notification"));
+                }
+
+                let sysmanager_path = String::from("/systemsmanager/parameters/get/");
+                let params: Vec<(String, String)> = vec![
+                    ("name".to_string(), "message_components".to_string()),
+                    ("withDecryption".to_string(), "true".to_string()),
+                ];
+
+                let message_components = match self
+                    .caller
+                    .get::<MessageComponents>(sysmanager_path, params, config)
+                    .await
+                {
+                    Ok(m) => m,
+                    Err(e) => {
+                        println!("Error calling AWS Parameter Store layer: {e}");
+                        return Ok(());
+                    }
+                };
+
+                let mut rng: Rng = Rng::new();
+                let message = match Robochick::build_from_templates(&message_components, &mut rng) {
+                    Ok(m) => m,
+                    Err(e) => {
+                        println!("Failed to build message: {e}");
+                        return Ok(());
+                    }
+                };
+
+                println!("Message built: {}", &message);
+                return match self.caller.say(message, config).await {
+                    Ok(_) => {
+                        println!("Successfully posted message in chat");
+                        Ok(())
+                    }
+                    Err(e) => {
+                        println!("Failed to call Streamelements API: {e}");
+                        Ok(())
+                    }
+                };
+            } else {
+                Err(anyhow!(
+                    "Missing {} header",
+                    EventsubHeader::SubscriptionType.as_ref()
+                ))
+            }
         }
 
         pub async fn handle(
@@ -119,12 +196,13 @@ pub mod event_handler {
                 }
 
                 MessageType::Notification => {
-                    if EventHandler::<T>::handle_notification(&request, headers, config)
+                    if self
+                        .handle_notification(&request, headers, config)
                         .await
                         .is_ok()
                     {
                         Response::builder()
-                            .status(StatusCode::OK)
+                            .status(StatusCode::NO_CONTENT)
                             .body(Body::Empty)
                             .map_err(Box::new)?
                     } else {
@@ -200,13 +278,14 @@ pub mod event_handler {
 
         use hmac::{Hmac, Mac};
         use lambda_http::{Body, Response};
-        use mockall::mock;
+        use mockall::{mock, predicate};
         use reqwest::StatusCode;
         use sha2::Sha256;
 
         use crate::client::{ParameterStoreCaller, StreamelementsCaller};
         use crate::config::AppConfig;
         use crate::handler::event_handler::{self, EventHandler, HmacSha256};
+        use crate::robochick::twitch::{MessageComponents, Scenario};
         use crate::types::twitch;
 
         mock! {
@@ -431,6 +510,92 @@ pub mod event_handler {
                 .await?;
 
             assert_eq!(StatusCode::NO_CONTENT, response.status());
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn handle_builds_scenario_and_calls_streamelements_api() -> Result<()> {
+            dotenv()?;
+            let config = AppConfig::from_env();
+            let message_id = "message-1";
+            let timestamp = "2025-09-14T00:00:00.123456789";
+
+            let mut payload_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            payload_path.push("resources/tests/reward_redemption_event.json");
+            let payload = std::fs::read_to_string(payload_path)?;
+
+            let input = format!(
+                "{}{}{}",
+                message_id.to_string(),
+                timestamp.to_string(),
+                payload.to_string()
+            );
+            let signature = generate_hmac(&input, &config.twitch_eventsub_subscription_secret)?;
+
+            let mut headers = HeaderMap::new();
+            headers.append(
+                twitch::EventsubHeader::MessageId.as_ref(),
+                message_id.parse().unwrap(),
+            );
+            headers.append(
+                twitch::EventsubHeader::MessageTimestamp.as_ref(),
+                timestamp.parse().unwrap(),
+            );
+            headers.append(
+                twitch::EventsubHeader::MessageSignature.as_ref(),
+                signature.parse().unwrap(),
+            );
+            headers.append(
+                twitch::EventsubHeader::MessageType.as_ref(),
+                twitch::MessageType::Notification.as_ref().parse().unwrap(),
+            );
+            headers.append(
+                twitch::EventsubHeader::SubscriptionType.as_ref(),
+                twitch::SubscriptionType::CustomRewardRedemption
+                    .as_ref()
+                    .parse()
+                    .unwrap(),
+            );
+            let scenarios: Vec<Scenario> = vec![Scenario {
+                template: "{placeholder} wins by default.".into(),
+                winners: vec!["placeholder".into()],
+                others: vec![],
+            }];
+            let mods: Vec<String> = vec!["John".into()];
+            let expected_message_component = MessageComponents { scenarios, mods };
+            let expected_message = "John wins by default.";
+
+            let mut mock_caller = MockCaller::new();
+            let config_mock = mock_caller
+                .expect_get::<MessageComponents>()
+                .with(
+                    predicate::eq("/systemsmanager/parameters/get/".to_string()),
+                    predicate::eq(vec![
+                        ("name".to_string(), "message_components".to_string()),
+                        ("withDecryption".to_string(), "true".to_string()),
+                    ]),
+                    predicate::eq(config.clone()),
+                )
+                .return_once(|_, _, _| Ok(expected_message_component))
+                .once();
+
+            let se_mock = mock_caller
+                .expect_say()
+                .with(
+                    predicate::eq(expected_message.to_string()),
+                    predicate::eq(config.clone()),
+                )
+                .return_once(|_, _| Ok("result".to_string()))
+                .once();
+
+            let event_handler = EventHandler::new(mock_caller);
+
+            let response: Response<Body> = event_handler
+                .handle(payload.to_string(), &headers, &config)
+                .await?;
+
+            assert_eq!(StatusCode::NO_CONTENT, response.status());
+
             Ok(())
         }
 
