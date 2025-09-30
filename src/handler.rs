@@ -1,5 +1,5 @@
 pub mod event_handler {
-    use std::str::FromStr;
+    use std::{path::PathBuf, str::FromStr};
 
     use anyhow::{Result, anyhow};
     use axum::http::{HeaderMap, HeaderName};
@@ -15,7 +15,7 @@ pub mod event_handler {
     use sha2::Sha256;
 
     use crate::{
-        client::{ParameterStoreCaller, StreamelementsCaller},
+        client::StreamelementsCaller,
         config::AppConfig,
         robochick::twitch::{MessageBuilder, MessageComponents, Robochick},
         types::twitch::{
@@ -26,11 +26,11 @@ pub mod event_handler {
 
     type HmacSha256 = Hmac<Sha256>;
 
-    pub struct EventHandler<T: ParameterStoreCaller + StreamelementsCaller> {
+    pub struct EventHandler<T: StreamelementsCaller> {
         caller: T,
     }
 
-    impl<T: ParameterStoreCaller + StreamelementsCaller> EventHandler<T> {
+    impl<T: StreamelementsCaller> EventHandler<T> {
         pub fn new(caller: T) -> Self {
             EventHandler { caller }
         }
@@ -71,11 +71,7 @@ pub mod event_handler {
             config: &AppConfig,
         ) -> Result<()> {
             if let Some(header) = headers.get(EventsubHeader::SubscriptionType.as_ref()) {
-                if header
-                    .to_str()
-                    .map(SubscriptionType::from_str)
-                    .is_err()
-                {
+                if header.to_str().map(SubscriptionType::from_str).is_err() {
                     return Err(anyhow!("Unknown Subscription-Type header: {:?}", header));
                 }
 
@@ -104,17 +100,16 @@ pub mod event_handler {
                     ("withDecryption".to_string(), "true".to_string()),
                 ];
 
-                let message_components = match self
-                    .caller
-                    .get::<MessageComponents>(sysmanager_path, params, config)
-                    .await
-                {
+                let msg_config_path = PathBuf::from(config.message_components_config_path.clone());
+                let message_components: MessageComponents = match read_config(&msg_config_path) {
                     Ok(m) => m,
                     Err(e) => {
-                        println!("Error calling AWS Parameter Store layer: {e}");
+                        println!("Error reading message configuration file: {e}");
                         return Ok(());
                     }
                 };
+
+                dbg!(&message_components);
 
                 let mut rng: Rng = Rng::new();
                 let message = match Robochick::build_from_templates(&message_components, &mut rng) {
@@ -266,6 +261,20 @@ pub mod event_handler {
         }
     }
 
+    fn read_config(path: &PathBuf) -> Result<MessageComponents> {
+        let config_str = match std::fs::read_to_string(path) {
+            Ok(text) => text,
+            Err(_) => {
+                return Err(anyhow!(
+                    "Failed to read configuration file for building messages"
+                ));
+            }
+        };
+
+        serde_json::from_str::<MessageComponents>(config_str.as_ref())
+            .map_err(|e| anyhow!("Failed to deserialize message config: {e}"))
+    }
+
     #[cfg(test)]
     mod tests {
         use anyhow::Result;
@@ -282,7 +291,7 @@ pub mod event_handler {
         use reqwest::StatusCode;
         use sha2::Sha256;
 
-        use crate::client::{ParameterStoreCaller, StreamelementsCaller};
+        use crate::client::StreamelementsCaller;
         use crate::config::AppConfig;
         use crate::handler::event_handler::{self, EventHandler, HmacSha256};
         use crate::robochick::twitch::{MessageComponents, Scenario};
@@ -290,10 +299,6 @@ pub mod event_handler {
 
         mock! {
             pub Caller {}
-
-            impl ParameterStoreCaller for Caller {
-                async fn get<MessageComponents: 'static>(&self, path: String, params: Vec<(String, String)>, config: &AppConfig) -> Result<MessageComponents>;
-            }
 
             impl StreamelementsCaller for Caller {
                 async fn say(&self, msg: String, config: &AppConfig) -> Result<String>;
@@ -556,29 +561,11 @@ pub mod event_handler {
                     .parse()
                     .unwrap(),
             );
-            let scenarios: Vec<Scenario> = vec![Scenario {
-                template: "{placeholder} wins by default.".into(),
-                winners: vec!["placeholder".into()],
-                others: vec![],
-            }];
-            let mods: Vec<String> = vec!["John".into()];
-            let expected_message_component = MessageComponents { scenarios, mods };
-            let expected_message = "John wins by default.";
+
+            let expected_message =
+                "Anna's feeling benevolent this time, all the mods got a dry cracker each!";
 
             let mut mock_caller = MockCaller::new();
-            let config_mock = mock_caller
-                .expect_get::<MessageComponents>()
-                .with(
-                    predicate::eq("/systemsmanager/parameters/get/".to_string()),
-                    predicate::eq(vec![
-                        ("name".to_string(), "message_components".to_string()),
-                        ("withDecryption".to_string(), "true".to_string()),
-                    ]),
-                    predicate::eq(config.clone()),
-                )
-                .return_once(|_, _, _| Ok(expected_message_component))
-                .once();
-
             let se_mock = mock_caller
                 .expect_say()
                 .with(

@@ -17,3 +17,6 @@ target
 .env
 .env.test
 .env.dev
+
+# virtual envs for python
+mocks/.venv
