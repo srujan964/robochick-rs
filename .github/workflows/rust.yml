@@ -10,8 +10,8 @@ jobs:
       run: |
         touch .env
         echo TWITCH_CLIENT_ID="client-id" >> .env
-        echo TWITCH_EVENTSUB_SUBSCRIPTION_SECRET="chickencoop" >> .env 
-        echo TWITCH_CHANNEL_ID="example_channel_id" >> .env
+        echo TWITCH_EVENTSUB_SUBSCRIPTION_SECRET="chickencoop" >> .env
+        echo TWITCH_CHANNEL_ID="test_channel_id" >> .env
         echo TWITCH_HOST="httpL//localhost:3696/twitch/" >> .env
         echo SE_API_HOST="http://localhost:3000/streamelements/" >> .env
         echo AWS_PARAMETER_STORE_HOST="http://localhost" >> .env
