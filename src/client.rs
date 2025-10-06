@@ -29,7 +29,7 @@ impl StreamelementsCaller for WebClient {
     async fn say(&self, msg: String, config: &AppConfig) -> Result<String> {
         let host = config.se_api_host.clone();
         let mut url = Url::parse(&host)?;
-        url = url.join(format!("/kappa/v2/bot/{}/say", &config.twitch_channel_id).as_ref())?;
+        url = url.join(format!("kappa/v2/bot/{}/say", &config.twitch_channel_id).as_ref())?;
 
         let req_body = MessageRequest {
             message: msg.clone(),
@@ -91,7 +91,7 @@ mod tests {
 
         let expected_body = r#"{"message":"Hello, World!"}"#;
         let mock = mock_server
-            .mock("POST", "/kappa/v2/bot/example_channel_id/say")
+            .mock("POST", "/kappa/v2/bot/test_channel_id/say")
             .match_header(
                 "Authorization",
                 mockito::Matcher::Exact(format!("Bearer {}", &config.se_jwt.as_ref().unwrap())),
@@ -127,7 +127,7 @@ mod tests {
 
         let expected_body = r#"{"message":"Hello, World!"}"#;
         let mock = mock_server
-            .mock("POST", "/kappa/v2/bot/example_channel_id/say")
+            .mock("POST", "/kappa/v2/bot/test_channel_id/say")
             .match_header(
                 "Authorization",
                 mockito::Matcher::Exact(format!("Bearer {}", &config.se_jwt.as_ref().unwrap())),
