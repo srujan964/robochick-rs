@@ -1,0 +1,41 @@
+{
+  "port": 3696,
+  "protocol": "http",
+  "name": "robochick-mocks",
+  "defaultResponse": {
+    "statusCode": 400,
+    "body": {
+      "text": "BadRequest"
+    },
+    "headers": {
+      "content-type": "application/json;charset=utf-8"
+    }
+  },
+  "stubs": [
+    {
+      "predicates": [
+        {
+          "equals": {
+            "method": "POST",
+            "path": "/streamelements/kappa/v2/bot/test_channel_id/say"
+          }
+        }
+      ],
+      "responses": [
+        {
+          "is": {
+            "statusCode": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "body": {
+              "status": 200,
+              "channel": "test_channel_id",
+              "message": "Message sent!"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

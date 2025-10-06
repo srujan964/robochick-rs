@@ -18,5 +18,9 @@ target
 .env.test
 .env.dev
 
-# virtual envs for python
-mocks/.venv
+# files from mountebank
+*.log
+*.pid
+
+# curl related files
+curl-format.txt
