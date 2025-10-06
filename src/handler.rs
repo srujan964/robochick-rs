@@ -146,13 +146,18 @@ pub mod event_handler {
             config: &AppConfig,
         ) -> Result<Response<Body>> {
             // fail early if we fail to verify if the event is from twitch or not
-            if EventHandler::<T>::verify(&request, headers, config).is_err() {
-                let resp = Response::builder()
-                    .status(StatusCode::FORBIDDEN)
-                    .body(Body::Empty)
-                    .map_err(Box::new)?;
 
-                return Ok(resp);
+            match EventHandler::<T>::verify(&request, headers, config) {
+                Ok(_) => (),
+                Err(e) => {
+                    eprintln!("Unverified event. Error: {e}");
+                    let resp = Response::builder()
+                        .status(StatusCode::FORBIDDEN)
+                        .body(Body::Empty)
+                        .map_err(Box::new)?;
+
+                    return Ok(resp);
+                }
             }
 
             let message_type_val = match headers.get(EventsubHeader::MessageType.as_ref()) {
