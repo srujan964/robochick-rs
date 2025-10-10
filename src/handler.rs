@@ -94,12 +94,6 @@ pub mod event_handler {
                     return Err(anyhow!("Unknown notification"));
                 }
 
-                let sysmanager_path = String::from("/systemsmanager/parameters/get/");
-                let params: Vec<(String, String)> = vec![
-                    ("name".to_string(), "message_components".to_string()),
-                    ("withDecryption".to_string(), "true".to_string()),
-                ];
-
                 let msg_config_path = PathBuf::from(config.message_components_config_path.clone());
                 let message_components: MessageComponents = match read_config(&msg_config_path) {
                     Ok(m) => m,
@@ -108,8 +102,6 @@ pub mod event_handler {
                         return Ok(());
                     }
                 };
-
-                dbg!(&message_components);
 
                 let mut rng: Rng = Rng::new();
                 let message = match Robochick::build_from_templates(&message_components, &mut rng) {
@@ -121,13 +113,13 @@ pub mod event_handler {
                 };
 
                 println!("Message built: {}", &message);
-                return match self.caller.say(message, config).await {
-                    Ok(_) => {
-                        println!("Successfully posted message in chat");
+                return match self.caller.say(&message, config).await {
+                    Ok(resp) => {
+                        println!("Successfully posted message in chat!");
                         Ok(())
                     }
                     Err(e) => {
-                        println!("Failed to call Streamelements API: {e}");
+                        println!("Streamelements API request failed: {e}");
                         Ok(())
                     }
                 };
@@ -182,6 +174,8 @@ pub mod event_handler {
                     if let Ok(challenge) =
                         EventHandler::<T>::handle_challenge(&request, headers, config)
                     {
+                        println!("Responding to challenge request with: {challenge}");
+
                         Response::builder()
                             .status(StatusCode::OK)
                             .header(CONTENT_TYPE, "text/plain")
@@ -306,13 +300,13 @@ pub mod event_handler {
             pub Caller {}
 
             impl StreamelementsCaller for Caller {
-                async fn say(&self, msg: String, config: &AppConfig) -> Result<String>;
+                async fn say(&self, msg: &str, config: &AppConfig) -> Result<String>;
             }
         }
 
         #[test]
         fn verify_returns_true_for_valid_event() -> Result<()> {
-            dotenv()?;
+            dotenvy::from_filename(".env.test")?;
             let config = AppConfig::from_env();
             let message_id = "message-1";
             let timestamp = "2025-09-14T00:00:00.123456789";
@@ -352,7 +346,7 @@ pub mod event_handler {
 
         #[test]
         fn verify_returns_false_for_missing_header() -> Result<()> {
-            dotenv()?;
+            dotenvy::from_filename(".env.test")?;
             let config = AppConfig::from_env();
             let timestamp = "2025-09-14T00:00:00.123456789";
             let payload = r#"{"message":"Hello, World!"}"#;
@@ -382,7 +376,7 @@ pub mod event_handler {
 
         #[test]
         fn verify_returns_false_for_incorrect_signature() -> Result<()> {
-            dotenv()?;
+            dotenvy::from_filename(".env.test")?;
             let config = AppConfig::from_env();
             let message_id = "message-1";
             let timestamp = "2025-09-14T00:00:00.123456789";
@@ -416,7 +410,7 @@ pub mod event_handler {
 
         #[tokio::test]
         async fn handle_returns_challenge_string_in_plaintext() -> Result<()> {
-            dotenv()?;
+            dotenvy::from_filename(".env.test")?;
             let config = AppConfig::from_env();
             let message_id = "message-1";
             let timestamp = "2025-09-14T00:00:00.123456789";
@@ -477,7 +471,7 @@ pub mod event_handler {
 
         #[tokio::test]
         async fn handle_returns_204_for_subscription_revocation() -> Result<()> {
-            dotenv()?;
+            dotenvy::from_filename(".env.test")?;
             let config = AppConfig::from_env();
             let message_id = "message-1";
             let timestamp = "2025-09-14T00:00:00.123456789";
@@ -525,7 +519,7 @@ pub mod event_handler {
 
         #[tokio::test]
         async fn handle_builds_scenario_and_calls_streamelements_api() -> Result<()> {
-            dotenv()?;
+            dotenvy::from_filename(".env.test")?;
             let config = AppConfig::from_env();
             let message_id = "message-1";
             let timestamp = "2025-09-14T00:00:00.123456789";

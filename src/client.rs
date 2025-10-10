@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 
 use anyhow::{Result, anyhow};
 use reqwest::{Body, Client, Url, header::AUTHORIZATION};
@@ -16,49 +16,48 @@ impl WebClient {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 struct MessageRequest {
     message: String,
 }
 
 pub trait StreamelementsCaller {
-    async fn say(&self, msg: String, config: &AppConfig) -> Result<String>;
+    async fn say(&self, msg: &str, config: &AppConfig) -> Result<String>;
 }
 
 impl StreamelementsCaller for WebClient {
-    async fn say(&self, msg: String, config: &AppConfig) -> Result<String> {
+    async fn say(&self, msg: &str, config: &AppConfig) -> Result<String> {
         let host = config.se_api_host.clone();
         let mut url = Url::parse(&host)?;
         url = url.join(format!("kappa/v2/bot/{}/say", &config.twitch_channel_id).as_ref())?;
 
-        let req_body = MessageRequest {
-            message: msg.clone(),
-        };
+        let mut req_body: HashMap<String, String> = HashMap::new();
+        req_body.insert("message".to_string(), String::from(msg));
 
-        let req_body_string = serde_json::to_string(&req_body)?;
-
-        if let Ok(resp) = self
+        return match self
             .client
             .post(url)
             .bearer_auth(config.se_jwt.as_ref().expect("Missing Streamelements JWT"))
-            .body(Body::from(req_body_string))
+            .json(&req_body)
             .timeout(Duration::new(1, 0))
             .send()
             .await
         {
-            if resp.status().is_success() {
-                resp.text()
-                    .await
-                    .map_err(|e| anyhow!("Failed to read response body"))
-            } else {
-                Err(anyhow!(
-                    "Streamelemenst API returned error with status: {}",
-                    resp.status()
-                ))
+            Ok(resp) => {
+                if resp.status().is_success() {
+                    resp.text()
+                        .await
+                        .map_err(|e| anyhow!("Failed to read response body"))
+                } else {
+                    Err(anyhow!(
+                        "Streamelemenst API returned error with status: {}",
+                        resp.status()
+                    ))
+                }
             }
-        } else {
-            Err(anyhow!("Failed to make request to Streamelements API"))
-        }
+
+            Err(e) => Err(anyhow!("Failed to make request to Streamelements API: {e}")),
+        };
     }
 }
 
@@ -78,7 +77,7 @@ mod tests {
 
     #[tokio::test]
     async fn say_makes_successful_request() -> Result<()> {
-        dotenv()?;
+        dotenvy::from_filename(".env.test")?;
         let mut config = AppConfig::from_env();
         let mut mock_server = Server::new_async().await;
         config = config.with_se_api_host(format!("http://{}", mock_server.host_with_port()));
@@ -105,7 +104,7 @@ mod tests {
         let webclient = WebClient::new(client);
 
         let message: String = "Hello, World!".into();
-        let result = webclient.say(message, &config).await?;
+        let result = webclient.say(message.as_ref(), &config).await?;
 
         mock.assert_async().await;
         assert_eq!(result, response_body);
@@ -114,7 +113,7 @@ mod tests {
 
     #[tokio::test]
     async fn say_returns_err_if_api_returns_4xx_error() -> Result<()> {
-        dotenv()?;
+        dotenvy::from_filename(".env.test")?;
         let mut config = AppConfig::from_env();
         let mut mock_server = Server::new_async().await;
         config = config.with_se_api_host(format!("http://{}", mock_server.host_with_port()));
@@ -141,7 +140,7 @@ mod tests {
         let webclient = WebClient::new(client);
 
         let message: String = "Hello, World!".into();
-        let result = webclient.say(message, &config).await;
+        let result = webclient.say(message.as_ref(), &config).await;
 
         mock.assert_async().await;
         assert!(result.is_err());

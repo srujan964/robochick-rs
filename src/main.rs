@@ -214,7 +214,7 @@ mod tests {
 
     #[test]
     fn from_env_creates_config() -> Result<()> {
-        dotenv()?;
+        dotenvy::from_filename(".env.test")?;
         let _result = AppConfig::from_env();
         Ok(())
     }
