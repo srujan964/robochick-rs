@@ -34,7 +34,7 @@ impl StreamelementsCaller for WebClient {
         let mut req_body: HashMap<String, String> = HashMap::new();
         req_body.insert("message".to_string(), String::from(msg));
 
-        return match self
+        match self
             .client
             .post(url)
             .bearer_auth(config.se_jwt.as_ref().expect("Missing Streamelements JWT"))
@@ -57,7 +57,7 @@ impl StreamelementsCaller for WebClient {
             }
 
             Err(e) => Err(anyhow!("Failed to make request to Streamelements API: {e}")),
-        };
+        }
     }
 }
 

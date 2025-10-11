@@ -12,6 +12,7 @@ use reqwest::{StatusCode, Url};
 
 use crate::{client::WebClient, config::AppConfig, handler::event_handler::EventHandler};
 
+mod auth;
 mod client;
 mod handler;
 mod robochick;
@@ -133,22 +134,26 @@ async fn oauth_handler(
             }
         };
 
-        return match resp.text().await {
-            Ok(response) => {
-                todo!("store auth token in secretsmanager");
-                Response::builder()
-                    .status(StatusCode::CREATED)
-                    .body(Body::Empty)
-                    .unwrap()
-            }
+        let oauth_response = match resp.text().await {
+            Ok(response) => response,
             Err(e) => {
                 println!("Error getting response data from oauth API: {e}");
-                Response::builder()
+                return Response::builder()
                     .status(StatusCode::INTERNAL_SERVER_ERROR)
                     .body(Body::Empty)
-                    .unwrap()
+                    .unwrap();
             }
         };
+
+        match auth::securely_store_oauth_tokens(oauth_response).await {
+            Ok(secret_name) => println!("Successfully stored in {secret_name}"),
+            Err(e) => println!("Failed to store oauth response: {e}"),
+        }
+
+        return Response::builder()
+            .status(StatusCode::CREATED)
+            .body(Body::Empty)
+            .unwrap();
     }
     println!("Authorization request from Twitch is missing code and/or scopes param");
 
