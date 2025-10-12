@@ -30,8 +30,6 @@ pub mod config {
         pub twitch_host: String,
         pub se_jwt: Option<String>,
         pub se_api_host: String,
-        pub aws_session_token: String,
-        pub aws_parameter_store_host: String,
         pub feed_mods_rewards_id: String,
         pub broadcaster_user_id: String,
         pub redirect_uri: String,
@@ -53,10 +51,6 @@ pub mod config {
                 twitch_host: env::var("TWITCH_HOST").expect("Missing TWITCH_HOST env var"),
                 se_jwt: env::var("SE_JWT").ok(),
                 se_api_host: env::var("SE_API_HOST").expect("Missing SE_API_HOST env var"),
-                aws_session_token: env::var("AWS_SESSION_TOKEN")
-                    .expect("Missing AWS_SESSION_TOKEN env var"),
-                aws_parameter_store_host: env::var("AWS_PARAMETER_STORE_HOST")
-                    .expect("Missing AWS_PARAMETER_STORE_HOST env var"),
                 feed_mods_rewards_id: env::var("FEED_MODS_REWARD_ID")
                     .expect("Missing FEED_MODS_REWARD_ID env var"),
                 broadcaster_user_id: env::var("BROADCASTER_USER_ID")
@@ -64,13 +58,6 @@ pub mod config {
                 redirect_uri: env::var("REDIRECT_URI").expect("Missing REDIRECT_URI env var"),
                 message_components_config_path: env::var("MESSAGE_COMPONENTS_CONFIG_PATH")
                     .expect("Missing MESSAGE_COMPONENTS_CONFIG_PATH env var"),
-            }
-        }
-
-        pub(crate) fn with_aws_parameter_store_host(&self, new: String) -> Self {
-            AppConfig {
-                aws_parameter_store_host: new.clone(),
-                ..self.clone()
             }
         }
 

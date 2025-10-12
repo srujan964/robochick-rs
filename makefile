@@ -20,5 +20,5 @@ deploy: build_release
 	@echo "Deploying lambda..."
 	aws lambda update-function \
 		--function-name $(LAMBDA_FUNCTION) \
-		--zip-file fileb://$(ZIP_FILE)
+		--zip-file fileb://$(ZIP_FILE) \
 		--region $(AWS_REGION)
