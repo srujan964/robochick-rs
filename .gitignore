@@ -24,3 +24,6 @@ target
 
 # curl related files
 curl-format.txt
+
+# local only folders
+out
