@@ -5,7 +5,7 @@ use axum::{
     Router,
     extract::{Query, Request, State},
     http::HeaderMap,
-    routing::post,
+    routing::{get, post},
 };
 use lambda_http::{Body, Error, Response};
 use reqwest::{StatusCode, Url};
@@ -108,6 +108,13 @@ impl AppState {
     }
 }
 
+async fn healthcheck() -> Response<Body> {
+    Response::builder()
+        .status(StatusCode::OK)
+        .body(Body::from("bokbokbok"))
+        .unwrap()
+}
+
 async fn oauth_handler(
     State(state): State<AppState>,
     Query(params): Query<HashMap<String, String>>,
@@ -151,15 +158,28 @@ async fn oauth_handler(
         }
 
         return Response::builder()
-            .status(StatusCode::CREATED)
-            .body(Body::Empty)
+            .status(StatusCode::BAD_REQUEST)
+            .header("Content-Type", "text/html")
+            .body(Body::from("Authorized! Have a nice day!"))
             .unwrap();
     }
+
+    if let (Some(error), Some(error_desc)) = (params.get("error"), params.get("error_description"))
+    {
+        println!("Authorization denied by user :( Error: {error} and description: {error_desc}");
+
+        return Response::builder()
+            .status(StatusCode::OK)
+            .header("Content-Type", "text/html")
+            .body(Body::from("Authorization denied :("))
+            .unwrap();
+    }
+
     println!("Authorization request from Twitch is missing code and/or scopes param");
 
     Response::builder()
         .status(StatusCode::BAD_REQUEST)
-        .body(Body::Empty)
+        .body(Body::from("Authorized! Have a nice day!"))
         .unwrap()
 }
 
@@ -193,7 +213,8 @@ async fn main() -> Result<(), Error> {
     let state = AppState::new(config);
 
     let app = Router::new()
-        .route("/twitch/oauth", post(oauth_handler))
+        .route("/health", get(healthcheck))
+        .route("/twitch/oauth", get(oauth_handler))
         .route("/twitch/eventsub", post(eventsub_handler))
         .with_state(state.clone());
 
