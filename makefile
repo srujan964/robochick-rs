@@ -21,4 +21,4 @@ deploy: build_release
 	aws lambda update-function \
 		--function-name $(LAMBDA_FUNCTION) \
 		--zip-file fileb://$(ZIP_FILE) \
-		--region $(AWS_REGION)
+		--region $(AWS_REGION) > /dev/null
