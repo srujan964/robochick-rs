@@ -122,7 +122,7 @@ pub mod twitch {
             let scenarios: &[Scenario] = message_components.get_scenarios();
 
             if let Some(scenario_pick) = pick_random(scenarios, 1, rng).pop() {
-                let m = scenario_pick.get_template().len();
+                let m = scenario_pick.get_winners().len();
                 let n = scenario_pick.get_others().len();
 
                 let winners = pick_random(mods, m, rng);
@@ -296,6 +296,27 @@ pub mod twitch {
 
             let result = Robochick::build_from_templates(&message_components, &mut rng);
             assert!(result.is_err());
+
+            Ok(())
+        }
+
+        #[test]
+        fn build_from_templates_should_succeed_if_no_placeholders_provided_in_template()
+        -> Result<()> {
+            let scenario = Scenario {
+                template: "This sentence has no placeholders as intended.".into(),
+                winners: vec![],
+                others: vec![],
+            };
+            let mods: Vec<String> = vec!["Alice".into(), "Bob".into()];
+            let message_components = MessageComponents {
+                scenarios: vec![scenario],
+                mods,
+            };
+            let mut rng = Rng::with_seed(1);
+
+            let result = Robochick::build_from_templates(&message_components, &mut rng)?;
+            assert_eq!("This sentence has no placeholders as intended.", result);
 
             Ok(())
         }
