@@ -145,7 +145,7 @@ async fn oauth_handler(
         }
 
         return Response::builder()
-            .status(StatusCode::BAD_REQUEST)
+            .status(StatusCode::OK)
             .header("Content-Type", "text/html")
             .body(Body::from("Authorized! Have a nice day!"))
             .unwrap();
@@ -166,7 +166,7 @@ async fn oauth_handler(
 
     Response::builder()
         .status(StatusCode::BAD_REQUEST)
-        .body(Body::from("Authorized! Have a nice day!"))
+        .body(Body::from("Malformed auth request."))
         .unwrap()
 }
 
