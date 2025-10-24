@@ -125,8 +125,21 @@ pub mod twitch {
                 let m = scenario_pick.get_winners().len();
                 let n = scenario_pick.get_others().len();
 
-                let winners = pick_random(mods, m, rng);
-                let others = pick_random(mods, n, rng);
+                let picks = pick_random(mods, m + n, rng);
+
+                // Consume all the picks into the winners and others vecs in one go so that
+                // the same mod cannot be picked into both vecs.
+                // Calling `pick_random()` once for each `m` and `n` had an edge case where
+                // it picked the same mod into both vecs.
+                let (winners, others) = match picks.split_at_checked(m) {
+                    Some((x, y)) => (x, y),
+                    None => {
+                        return Err(ScenarioError::PickFailed(
+                            "Failed to pick {m + n} mods".into(),
+                        ));
+                    }
+                };
+
                 scenario_pick.build(&winners, &others)
             } else {
                 Err(ScenarioError::PickFailed(
@@ -318,6 +331,32 @@ pub mod twitch {
             let result = Robochick::build_from_templates(&message_components, &mut rng)?;
             assert_eq!("This sentence has no placeholders as intended.", result);
 
+            Ok(())
+        }
+
+        #[test]
+        fn build_from_templates_should_ensure_mod_chosen_as_winner_is_not_chosen_as_other()
+        -> Result<()> {
+            let scenario = Scenario {
+                template: "{winner} is the winner, and a different person {other} is the loser."
+                    .into(),
+                winners: vec!["winner".into()],
+                others: vec!["other".into()],
+            };
+            let mods: Vec<String> = vec!["John".into(), "Jane".into()];
+            let message_components = MessageComponents {
+                scenarios: vec![scenario],
+                mods,
+            };
+            let mut rng: Rng = Rng::with_seed(1_000);
+
+            let result = Robochick::build_from_templates(&message_components, &mut rng)?;
+
+            // Expected message for this specific seed `1_000`
+            assert_eq!(
+                "John is the winner, and a different person Jane is the loser.",
+                result
+            );
             Ok(())
         }
     }
