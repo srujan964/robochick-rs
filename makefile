@@ -1,6 +1,6 @@
 ARCH = arm64
 LAMBDA_FUNCTION = robochick
-ZIP_FILE = bootrap.zip
+ZIP_FILE = bootstrap.zip
 
 all: test build_release
 
