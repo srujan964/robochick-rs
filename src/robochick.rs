@@ -127,9 +127,12 @@ pub mod twitch {
 
                 let picks = pick_random(mods, m + n, rng);
 
-                // Calling `pick_random()` once for each `m` and `n` had an edge case where
-                // it picked the same mod into both vecs.
-                // So this makes sure they're mutually exclusive.
+                /**
+                 * Calling `pick_random()` once for each `m` and `n` had an edge case where
+                 * it picked the same element into both vecs.
+                 * `fastrand::Rng::choose_multiple()` randomly samples elements so making all the picks
+                 *  in one go and then using `split_at_checked()` makes sure they are mutually exclusive.
+                 */
                 let (winners, others) = match picks.split_at_checked(m) {
                     Some((x, y)) => (x, y),
                     None => {
