@@ -127,10 +127,9 @@ pub mod twitch {
 
                 let picks = pick_random(mods, m + n, rng);
 
-                // Consume all the picks into the winners and others vecs in one go so that
-                // the same mod cannot be picked into both vecs.
                 // Calling `pick_random()` once for each `m` and `n` had an edge case where
                 // it picked the same mod into both vecs.
+                // So this makes sure they're mutually exclusive.
                 let (winners, others) = match picks.split_at_checked(m) {
                     Some((x, y)) => (x, y),
                     None => {
