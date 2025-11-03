@@ -50,6 +50,7 @@ jobs:
           role-to-assume: ${{ secrets.ASSUME_ROLE_NAME }}
           aws-region: ${{ secrets.AWS_REGION }}
           mask-aws-account-id: true
+          role-session-name: ${{ github.run_id }}
       - name: Fetch configuration file
         run: |
           aws s3 cp s3://${{ secrets.BUCKET_NAME }}/${{ env.CONFIG_FILE_PATH }} ${{ env.CONFIG_FILE_PATH }}
