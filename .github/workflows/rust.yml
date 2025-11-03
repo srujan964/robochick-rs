@@ -11,6 +11,9 @@ jobs:
     steps:
     - name: Checkout the repository
       uses: actions/checkout@v4
+    - name: Test stdout redirection
+      run: |
+        echo 'Hello' > /dev/null 2>& 1
     - name: Initialize env file
       run: |
         touch .env.test
