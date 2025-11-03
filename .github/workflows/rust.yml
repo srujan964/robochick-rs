@@ -58,7 +58,7 @@ jobs:
           aws lambda update-function \
             --function-name robochick
             --zip-file fileb://${{ env.TARGET_DIR }}
-            --region ${{ secrets.AWS_REGION }} > /dev/null
+            --region ${{ secrets.AWS_REGION }} > /dev/null 2>& 1
 
 name: Rust
 'on':
