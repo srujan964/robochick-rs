@@ -1,6 +1,9 @@
 ---
 env:
   CARGO_TERM_COLOR: always
+permissions:
+  id-token: write
+  contents: read
 jobs:
   test:
     name: Run tests
