@@ -37,11 +37,12 @@ jobs:
         uses: actions/checkout@v4
       - name: Install cargo lambda
         run: curl -fsSL https://cargo-lambda.info/install.sh | sh
-      - name: Fetch configuration file
+      - name: Authenticate to AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.ASSUME_ROLE_NAME }}
           aws-region: ${{ secrets.AWS_REGION }}
+      - name: Fetch configuration file
         run: |
           aws s3 cp s3://${{ secrets.BUCKET_NAME }}/${{ env.CONFIG_FILE_PATH }} ${{ env.CONFIG_FILE_PATH }}
       - name: Cross compile to arm64
@@ -50,10 +51,6 @@ jobs:
             --output-format zip \
             --include ${{ env.CONFIG_FILE_PATH }}
       - name: Deploy lambda function
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.ASSUME_ROLE_NAME }}
-          aws-region: ${{ secrets.AWS_REGION }}
         run: |
           aws lambda update-function \
             --function-name robochick
