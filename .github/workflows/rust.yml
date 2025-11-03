@@ -2,11 +2,13 @@
 env:
   CARGO_TERM_COLOR: always
 jobs:
-  build:
+  test:
+    name: Run tests
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - name: Initalize env file
+    - name: Checkout the repository
+      uses: actions/checkout@v4
+    - name: Initialize env file
       run: |
         touch .env.test
         echo TWITCH_CLIENT_ID="client-id" >> .env.test
@@ -26,6 +28,37 @@ jobs:
         TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
         SE_JWT: ${{ secrets.SE_JWT }}
         AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+  build-and-deploy:
+    name: Build and deploy
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v4
+      - name: Install cargo lambda
+        run: curl -fsSL https://cargo-lambda.info/install.sh | sh
+      - name: Fetch configuration file
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.ASSUME_ROLE_NAME }}
+          aws-region: ${{ secrets.AWS_REGION }}
+        run: |
+          aws s3 cp s3://${{ secrets.BUCKET_NAME }}/${{ env.CONFIG_FILE_PATH }} ${{ env.CONFIG_FILE_PATH }}
+      - name: Cross compile to arm64
+        run: |
+          cargo lambda build --release --arm64 \
+            --output-format zip \
+            --include ${{ env.CONFIG_FILE_PATH }}
+      - name: Deploy lambda function
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.ASSUME_ROLE_NAME }}
+          aws-region: ${{ secrets.AWS_REGION }}
+        run: |
+          aws lambda update-function \
+            --function-name robochick
+            --zip-file fileb://${{ env.TARGET_DIR }}
+            --region ${{ secrets.AWS_REGION }} > /dev/null
 
 name: Rust
 'on':
