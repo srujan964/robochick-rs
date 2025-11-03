@@ -9,6 +9,10 @@ jobs:
     name: Run tests
     runs-on: ubuntu-latest
     steps:
+    - name: Test env
+      run: |
+        echo ${{ env.CONFIG_FILE_PATH }}
+        echo $CONFIG_FILE_PATH
     - name: Checkout the repository
       uses: actions/checkout@v4
     - name: Initialize env file
