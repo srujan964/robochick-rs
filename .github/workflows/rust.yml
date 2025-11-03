@@ -13,7 +13,9 @@ jobs:
       uses: actions/checkout@v4
     - name: Test stdout redirection
       run: |
-        echo 'Hello' > /dev/null 2>& 1
+        echo "Hello"
+        echo "This shouldn't be logged" > /dev/null 2>& 1
+        ls nonexistentfile > /dev/null 2>& 1
     - name: Initialize env file
       run: |
         touch .env.test
