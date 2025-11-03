@@ -20,8 +20,10 @@ jobs:
         echo BROADCASTER_USER_ID=1337 >> .env.test
         echo REDIRECT_URI="http://localhost:3696/twitch/oauth" >> .env.test
         echo MESSAGE_COMPONENTS_CONFIG_PATH="resources/config/message_components.json" >> .env.test
-    - name: Build
-      run: cargo build
+    - name: Check formatting
+      run: cargo fmt --check
+    - name: Run cargo check
+      run: cargo check
     - name: Run tests
       run: cargo test
       env:
