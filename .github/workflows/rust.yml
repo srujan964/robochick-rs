@@ -11,11 +11,6 @@ jobs:
     steps:
     - name: Checkout the repository
       uses: actions/checkout@v4
-    - name: Test stdout redirection
-      run: |
-        echo "Hello"
-        echo "This shouldn't be logged" > /dev/null 2>& 1
-        ls nonexistentfile > /dev/null 2>& 1
     - name: Initialize env file
       run: |
         touch .env.test
@@ -67,8 +62,8 @@ jobs:
       - name: Deploy lambda function
         run: |
           aws lambda update-function-code \
-            --function-name robochick
-            --zip-file fileb://./target/lambda/robochick-rs/bootstrap.zip
+            --function-name robochick \
+            --zip-file fileb://./target/lambda/robochick-rs/bootstrap.zip \
             --region ${{ secrets.AWS_REGION }} > /dev/null 2>& 1
 
 name: Rust
