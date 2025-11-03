@@ -164,8 +164,7 @@ pub mod twitch {
         }
 
         rng.choose_multiple(haystack, amount)
-            .iter()
-            .cloned()
+            .into_iter()
             .cloned()
             .collect()
     }
