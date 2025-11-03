@@ -61,7 +61,7 @@ jobs:
             --include message_components.json
       - name: Deploy lambda function
         run: |
-          aws lambda update-function \
+          aws lambda update-function-code \
             --function-name robochick
             --zip-file fileb://./target/lambda/robochick-rs/bootstrap.zip
             --region ${{ secrets.AWS_REGION }} > /dev/null 2>& 1
