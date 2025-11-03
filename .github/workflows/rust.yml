@@ -40,6 +40,8 @@ jobs:
     steps:
       - name: Checkout the repository
         uses: actions/checkout@v4
+      - name: Setup zig toolchain
+        uses: mlugg/setup-zig@v2
       - name: Install cargo lambda
         run: curl -fsSL https://cargo-lambda.info/install.sh | sh
       - name: Authenticate to AWS
