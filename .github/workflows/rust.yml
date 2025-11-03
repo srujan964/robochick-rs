@@ -47,7 +47,7 @@ jobs:
       - name: Authenticate to AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.ASSUME_ROLE_NAME }}
+          role-to-assume: ${{ secrets.ROLE_ARN_TO_ASSUME }}
           aws-region: ${{ secrets.AWS_REGION }}
           mask-aws-account-id: true
           role-session-name: ${{ github.run_id }}
