@@ -142,7 +142,7 @@ pub mod twitch {
                     }
                 };
 
-                scenario_pick.build(&winners, &others)
+                scenario_pick.build(winners, others)
             } else {
                 Err(ScenarioError::PickFailed(
                     "Failed to select a scenario".into(),
