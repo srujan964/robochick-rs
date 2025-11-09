@@ -72,3 +72,4 @@ name: Rust
     branches: [ "main" ]
   push:
     branches: [ "main" ]
+  workflow_dispatch:
