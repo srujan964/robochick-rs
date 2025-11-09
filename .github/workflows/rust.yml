@@ -23,12 +23,20 @@ jobs:
         echo BROADCASTER_USER_ID=1337 >> .env.test
         echo REDIRECT_URI="http://localhost:3696/twitch/oauth" >> .env.test
         echo MESSAGE_COMPONENTS_CONFIG_PATH="resources/config/message_components.json" >> .env.test
+    - name: Install cargo toolchain
+      uses: dtolnay/rust-toolchain@stable
+    - name: Cache deps
+      uses: Swatinem/rust-cache@v2
     - name: Check formatting
       run: cargo fmt --check
     - name: Run cargo check
-      run: cargo check
+      run: cargo check --locked
+    - name: Run clippy
+      run: |
+        rustup component add clippy
+        cargo clippy --locked
     - name: Run tests
-      run: cargo test
+      run: cargo test --locked
       env:
         TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
         SE_JWT: ${{ secrets.SE_JWT }}
@@ -42,8 +50,14 @@ jobs:
         uses: actions/checkout@v4
       - name: Setup zig toolchain
         uses: mlugg/setup-zig@v2
+      - name: Install cargo toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Setup cargobinstall
+        uses: cargo-bins/cargo-binstall@1.15.10
       - name: Install cargo lambda
-        run: curl -fsSL https://cargo-lambda.info/install.sh | sh
+        run: cargo binstall --no-confirm --no-symlinks lambda
+      - name: Cache deps
+        uses: Swatinem/rust-cache@v2
       - name: Authenticate to AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
