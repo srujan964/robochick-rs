@@ -53,7 +53,7 @@ jobs:
       - name: Install cargo toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Setup cargobinstall
-        uses: cargo-bins/cargo-binstall@1.15.10
+        uses: cargo-bins/cargo-binstall@v1.15.10
       - name: Install cargo lambda
         run: cargo binstall --no-confirm --no-symlinks lambda
       - name: Cache deps
