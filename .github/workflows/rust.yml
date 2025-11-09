@@ -55,7 +55,7 @@ jobs:
       - name: Setup cargobinstall
         uses: cargo-bins/cargo-binstall@v1.15.10
       - name: Install cargo lambda
-        run: cargo binstall --no-confirm --no-symlinks lambda
+        run: cargo binstall --no-confirm --no-symlinks cargo-lambda
       - name: Cache deps
         uses: Swatinem/rust-cache@v2
       - name: Authenticate to AWS
