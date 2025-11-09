@@ -137,8 +137,7 @@ pub mod event_handler {
             headers: &HeaderMap,
             config: &AppConfig,
         ) -> Result<Response<Body>> {
-            // fail early if we fail to verify if the event is from twitch or not
-
+            // bail early if we cannot verify that the event is from twitch
             match EventHandler::<T>::verify(&request, headers, config) {
                 Ok(_) => (),
                 Err(e) => {
