@@ -32,7 +32,7 @@ pub async fn securely_store_oauth_tokens(token_response: String) -> anyhow::Resu
         }
         Err(e) => match e.into_service_error() {
             GetSecretValueError::ResourceNotFoundException(_) => {
-                println!("Secret doesn't existing, creating one");
+                println!("Secret doesn't exist, creating one");
                 if create_new_secret(name, token_response.as_ref(), &client)
                     .await
                     .is_ok()
