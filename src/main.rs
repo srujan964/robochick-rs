@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::anyhow;
-use aws_config::BehaviorVersion;
+use aws_config::{BehaviorVersion, meta::region::RegionProviderChain};
 use aws_sdk_dynamodb::Client;
 use axum::{
     Router,
@@ -227,7 +227,11 @@ async fn main() -> Result<(), Error> {
     println!("Hello, world!");
 
     let config = AppConfig::from_env();
-    let aws_cfg = aws_config::load_defaults(BehaviorVersion::latest()).await;
+    let aws_cfg = aws_config::from_env()
+        .region(RegionProviderChain::default_provider().or_else("eu-west-2"))
+        .load()
+        .await;
+
     let dynamo_client = Client::new(&aws_cfg);
     let state = AppState::new(config, dynamo_client);
 
