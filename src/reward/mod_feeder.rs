@@ -16,7 +16,12 @@ pub struct ModFeed<C: StreamelementsCaller> {
 
 #[async_trait]
 impl<C: StreamelementsCaller> RewardHandler for ModFeed<C> {
-    async fn handle(&self, redeem: &RewardRedeemed, config: &AppConfig) -> Result<()> {
+    async fn handle(
+        &self,
+        _msg_id: String,
+        redeem: &RewardRedeemed,
+        config: &AppConfig,
+    ) -> Result<()> {
         let msg_config_path = PathBuf::from(config.message_components_config_path.clone());
         let message_components: MessageComponents = match read_config(&msg_config_path) {
             Ok(m) => m,
@@ -95,6 +100,7 @@ mod tests {
         let payload = std::fs::read_to_string(payload_path)?;
         let event: RewardRedeemed = serde_json::from_str::<RewardRedeemed>(&payload)?;
 
+        let msg_id = String::from("Message-Id");
         let expected_message =
             "Anna's feeling benevolent this time, all the mods got a dry cracker each!";
 
@@ -112,7 +118,7 @@ mod tests {
             client: mock_caller,
         };
 
-        let response: Result<()> = handler.handle(&event, &config).await;
+        let response: Result<()> = handler.handle(msg_id, &event, &config).await;
 
         assert!(response.is_ok());
         Ok(())

@@ -1,7 +1,7 @@
 pub mod event_handler {
     use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
-    use anyhow::{Result, anyhow};
+    use anyhow::{Context, Result, anyhow};
     use axum::http::{HeaderMap, HeaderName};
     use fastrand::Rng;
     use hex::decode;
@@ -93,8 +93,13 @@ pub mod event_handler {
                     return Err(anyhow!("Unknown notification"));
                 }
 
+                let msg_id = headers
+                    .get(EventsubHeader::MessageId.as_ref())
+                    .expect("MessageId should be sent by Twitch")
+                    .to_str()?;
+
                 match self.handlers.get(event.reward_id()) {
-                    Some(h) => h.handle(&event, config).await,
+                    Some(h) => h.handle(msg_id.to_string(), &event, config).await,
                     None => {
                         println!(
                             "Invalid notification: unknown reward id {}",

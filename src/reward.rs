@@ -8,5 +8,10 @@ pub mod mod_feeder;
 
 #[async_trait]
 pub trait RewardHandler: Send + Sync {
-    async fn handle(&self, redeem: &RewardRedeemed, config: &AppConfig) -> Result<()>;
+    async fn handle(
+        &self,
+        msg_id: String,
+        redeem: &RewardRedeemed,
+        config: &AppConfig,
+    ) -> Result<()>;
 }
