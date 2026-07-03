@@ -139,7 +139,10 @@ async fn oauth_handler(
         let resp = match reqwest::Client::new().post(url.unwrap()).send().await {
             Ok(resp) => resp,
             Err(e) => {
-                println!("Failed to create auth token: {e}");
+                println!(
+                    "Failed to create auth token, attempted to call /oauth2/token API. Caused by: {}",
+                    e.without_url()
+                );
                 return Response::builder()
                     .status(StatusCode::INTERNAL_SERVER_ERROR)
                     .body(Body::Empty)
@@ -150,7 +153,7 @@ async fn oauth_handler(
         let oauth_response = match resp.text().await {
             Ok(response) => response,
             Err(e) => {
-                println!("Error getting response data from oauth API: {e}");
+                println!("Error decoding data from oauth API response");
                 return Response::builder()
                     .status(StatusCode::INTERNAL_SERVER_ERROR)
                     .body(Body::Empty)
