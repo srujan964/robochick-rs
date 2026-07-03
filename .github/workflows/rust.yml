@@ -23,6 +23,8 @@ jobs:
         echo BROADCASTER_USER_ID=1337 >> .env.test
         echo REDIRECT_URI="http://localhost:3696/twitch/oauth" >> .env.test
         echo MESSAGE_COMPONENTS_CONFIG_PATH="resources/config/message_components.json" >> .env.test
+        echo RUBBERDUCK_REWARD_ID="0cc22610-1925-439f-8e61-27b3280e0c2a" >> .env.test
+        echo DUCK_REWARDS_TABLE_NAME="test-table" >> .env.test
     - name: Install cargo toolchain
       uses: dtolnay/rust-toolchain@stable
     - name: Cache deps

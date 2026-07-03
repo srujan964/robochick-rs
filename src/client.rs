@@ -21,8 +21,12 @@ struct MessageRequest {
     message: String,
 }
 
-pub trait StreamelementsCaller {
-    async fn say(&self, msg: &str, config: &AppConfig) -> Result<String>;
+pub trait StreamelementsCaller: Send + Sync {
+    fn say(
+        &self,
+        msg: &str,
+        config: &AppConfig,
+    ) -> impl std::future::Future<Output = Result<String>> + Send + Sync;
 }
 
 impl StreamelementsCaller for WebClient {

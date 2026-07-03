@@ -1,5 +1,5 @@
 pub mod event_handler {
-    use std::{path::PathBuf, str::FromStr};
+    use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
     use anyhow::{Result, anyhow};
     use axum::http::{HeaderMap, HeaderName};
@@ -17,6 +17,7 @@ pub mod event_handler {
     use crate::{
         client::StreamelementsCaller,
         config::AppConfig,
+        reward::{RewardHandler, mod_feeder::ModFeed},
         robochick::twitch::{MessageBuilder, MessageComponents, Robochick},
         types::twitch::{
             EventsubHeader, MessageType, RevocationEvent, RewardRedeemed, SubscriptionType,
@@ -26,13 +27,14 @@ pub mod event_handler {
 
     type HmacSha256 = Hmac<Sha256>;
 
-    pub struct EventHandler<T: StreamelementsCaller> {
-        caller: T,
+    #[derive(Default)]
+    pub struct EventHandler {
+        handlers: HashMap<String, Box<dyn RewardHandler>>,
     }
 
-    impl<T: StreamelementsCaller> EventHandler<T> {
-        pub fn new(caller: T) -> Self {
-            EventHandler { caller }
+    impl EventHandler {
+        pub fn register(&mut self, id: impl Into<String>, handler: impl RewardHandler + 'static) {
+            self.handlers.insert(id.into(), Box::new(handler));
         }
 
         fn handle_challenge(
@@ -83,46 +85,24 @@ pub mod event_handler {
                     }
                 };
 
-                if event.broadcaster_user_id() != config.broadcaster_user_id
-                    || event.reward_id() != config.feed_mods_rewards_id
-                {
+                if event.broadcaster_user_id() != config.broadcaster_user_id {
                     println!(
-                        "Invalid notification: unknown broadcaster user id {} or reward id {}",
+                        "Invalid notification: unknown broadcaster user id {}",
                         event.broadcaster_user_id(),
-                        event.reward_id(),
                     );
                     return Err(anyhow!("Unknown notification"));
                 }
 
-                let msg_config_path = PathBuf::from(config.message_components_config_path.clone());
-                let message_components: MessageComponents = match read_config(&msg_config_path) {
-                    Ok(m) => m,
-                    Err(e) => {
-                        println!("Error reading message configuration file: {e}");
-                        return Ok(());
+                match self.handlers.get(event.reward_id()) {
+                    Some(h) => h.handle(&event, config).await,
+                    None => {
+                        println!(
+                            "Invalid notification: unknown reward id {}",
+                            event.reward_id(),
+                        );
+                        Err(anyhow!("Unknown notification"))
                     }
-                };
-
-                let mut rng: Rng = Rng::new();
-                let message = match Robochick::build_from_templates(&message_components, &mut rng) {
-                    Ok(m) => m,
-                    Err(e) => {
-                        println!("Failed to build message: {e}");
-                        return Ok(());
-                    }
-                };
-
-                println!("Message built: {}", &message);
-                return match self.caller.say(&message, config).await {
-                    Ok(resp) => {
-                        println!("Successfully posted message in chat!");
-                        Ok(())
-                    }
-                    Err(e) => {
-                        println!("Streamelements API request failed: {e}");
-                        Ok(())
-                    }
-                };
+                }
             } else {
                 Err(anyhow!(
                     "Missing {} header",
@@ -138,7 +118,7 @@ pub mod event_handler {
             config: &AppConfig,
         ) -> Result<Response<Body>> {
             // bail early if we cannot verify that the event is from twitch
-            match EventHandler::<T>::verify(&request, headers, config) {
+            match EventHandler::verify(&request, headers, config) {
                 Ok(_) => (),
                 Err(e) => {
                     eprintln!("Unverified event. Error: {e}");
@@ -170,8 +150,7 @@ pub mod event_handler {
 
             let resp: Response<Body> = match message_type {
                 MessageType::WebhookCallbackVerification => {
-                    if let Ok(challenge) =
-                        EventHandler::<T>::handle_challenge(&request, headers, config)
+                    if let Ok(challenge) = EventHandler::handle_challenge(&request, headers, config)
                     {
                         println!("Responding to challenge request with: {challenge}");
 
@@ -206,7 +185,7 @@ pub mod event_handler {
                     }
                 }
                 MessageType::Revocation => {
-                    EventHandler::<T>::handle_revocation(&request, headers, config);
+                    EventHandler::handle_revocation(&request, headers, config);
 
                     Response::builder()
                         .status(StatusCode::NO_CONTENT)
@@ -334,11 +313,10 @@ pub mod event_handler {
             );
 
             let mock_caller = MockCaller::new();
-            let event_handler = EventHandler::new(mock_caller);
+            let event_handler = EventHandler::default();
 
-            let result = EventHandler::<MockCaller>::verify(payload, &headers, &config);
+            let result = EventHandler::verify(payload, &headers, &config);
 
-            dbg!(&result);
             assert!(result.is_ok());
             Ok(())
         }
@@ -364,10 +342,9 @@ pub mod event_handler {
             );
 
             let mock_caller = MockCaller::new();
-            let event_handler = EventHandler::new(mock_caller);
+            let event_handler = EventHandler::default();
 
-            let result =
-                EventHandler::<MockCaller>::verify(payload, &headers_without_msg_id, &config);
+            let result = EventHandler::verify(payload, &headers_without_msg_id, &config);
 
             assert!(result.is_err());
             Ok(())
@@ -399,9 +376,9 @@ pub mod event_handler {
             );
 
             let mock_caller = MockCaller::new();
-            let event_handler = EventHandler::new(mock_caller);
+            let event_handler = EventHandler::default();
 
-            let result = EventHandler::<MockCaller>::verify(payload, &headers, &config);
+            let result = EventHandler::verify(payload, &headers, &config);
 
             assert!(result.is_err());
             Ok(())
@@ -450,7 +427,7 @@ pub mod event_handler {
             let expected_challenge_val = "pogchamp-kappa-360noscope-vohiyo";
 
             let mock_caller = MockCaller::new();
-            let event_handler = EventHandler::new(mock_caller);
+            let event_handler = EventHandler::default();
 
             let response: Response<Body> = event_handler
                 .handle(payload.to_string(), &headers, &config)
@@ -463,6 +440,7 @@ pub mod event_handler {
                 Body::Text(s) => assert_eq!(s, expected_challenge_val),
                 Body::Binary(_) => panic!(),
                 Body::Empty => panic!(),
+                _ => panic!(),
             }
 
             Ok(())
@@ -506,81 +484,13 @@ pub mod event_handler {
             );
 
             let mock_caller = MockCaller::new();
-            let event_handler = EventHandler::new(mock_caller);
+            let event_handler = EventHandler::default();
 
             let response: Response<Body> = event_handler
                 .handle(payload.to_string(), &headers, &config)
                 .await?;
 
             assert_eq!(StatusCode::NO_CONTENT, response.status());
-            Ok(())
-        }
-
-        #[tokio::test]
-        async fn handle_builds_scenario_and_calls_streamelements_api() -> Result<()> {
-            dotenvy::from_filename(".env.test")?;
-            let config = AppConfig::from_env();
-            let message_id = "message-1";
-            let timestamp = "2025-09-14T00:00:00.123456789";
-
-            let mut payload_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            payload_path.push("resources/tests/reward_redemption_event.json");
-            let payload = std::fs::read_to_string(payload_path)?;
-
-            let input = format!(
-                "{}{}{}",
-                message_id.to_string(),
-                timestamp.to_string(),
-                payload.to_string()
-            );
-            let signature = generate_hmac(&input, &config.twitch_eventsub_subscription_secret)?;
-
-            let mut headers = HeaderMap::new();
-            headers.append(
-                twitch::EventsubHeader::MessageId.as_ref(),
-                message_id.parse().unwrap(),
-            );
-            headers.append(
-                twitch::EventsubHeader::MessageTimestamp.as_ref(),
-                timestamp.parse().unwrap(),
-            );
-            headers.append(
-                twitch::EventsubHeader::MessageSignature.as_ref(),
-                signature.parse().unwrap(),
-            );
-            headers.append(
-                twitch::EventsubHeader::MessageType.as_ref(),
-                twitch::MessageType::Notification.as_ref().parse().unwrap(),
-            );
-            headers.append(
-                twitch::EventsubHeader::SubscriptionType.as_ref(),
-                twitch::SubscriptionType::CustomRewardRedemption
-                    .as_ref()
-                    .parse()
-                    .unwrap(),
-            );
-
-            let expected_message =
-                "Anna's feeling benevolent this time, all the mods got a dry cracker each!";
-
-            let mut mock_caller = MockCaller::new();
-            let se_mock = mock_caller
-                .expect_say()
-                .with(
-                    predicate::eq(expected_message.to_string()),
-                    predicate::eq(config.clone()),
-                )
-                .return_once(|_, _| Ok("result".to_string()))
-                .once();
-
-            let event_handler = EventHandler::new(mock_caller);
-
-            let response: Response<Body> = event_handler
-                .handle(payload.to_string(), &headers, &config)
-                .await?;
-
-            assert_eq!(StatusCode::NO_CONTENT, response.status());
-
             Ok(())
         }
 

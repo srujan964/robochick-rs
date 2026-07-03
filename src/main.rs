@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
 use anyhow::anyhow;
+use aws_config::BehaviorVersion;
+use aws_sdk_dynamodb::Client;
 use axum::{
     Router,
     extract::{Query, Request, State},
@@ -9,12 +11,19 @@ use axum::{
 };
 use lambda_http::{Body, Error, Response};
 use reqwest::{StatusCode, Url};
+use tokio::sync::OnceCell;
 
-use crate::{client::WebClient, config::AppConfig, handler::event_handler::EventHandler};
+use crate::{
+    client::WebClient,
+    config::AppConfig,
+    handler::event_handler::EventHandler,
+    reward::{ducks::DuckRedeemed, mod_feeder::ModFeed},
+};
 
 mod auth;
 mod client;
 mod handler;
+mod reward;
 mod robochick;
 mod types;
 
@@ -34,6 +43,8 @@ pub mod config {
         pub broadcaster_user_id: String,
         pub redirect_uri: String,
         pub message_components_config_path: String,
+        pub rubberduck_rewards_id: String,
+        pub duck_rewards_table_name: String,
     }
 
     impl AppConfig {
@@ -58,6 +69,10 @@ pub mod config {
                 redirect_uri: env::var("REDIRECT_URI").expect("Missing REDIRECT_URI env var"),
                 message_components_config_path: env::var("MESSAGE_COMPONENTS_CONFIG_PATH")
                     .expect("Missing MESSAGE_COMPONENTS_CONFIG_PATH env var"),
+                rubberduck_rewards_id: env::var("RUBBERDUCK_REWARD_ID")
+                    .expect("Missing RUBBERDUCK_REWARD_ID env var"),
+                duck_rewards_table_name: env::var("DUCK_REWARDS_TABLE_NAME")
+                    .expect("Missing DUCK_REWARDS_TABLE_NAME env var"),
             }
         }
 
@@ -87,11 +102,15 @@ pub mod config {
 #[derive(Clone)]
 struct AppState {
     config: AppConfig,
+    dynamo_client: Client,
 }
 
 impl AppState {
-    fn new(config: AppConfig) -> Self {
-        AppState { config }
+    fn new(config: AppConfig, dynamo_client: Client) -> Self {
+        AppState {
+            config,
+            dynamo_client,
+        }
     }
 }
 
@@ -177,7 +196,18 @@ async fn eventsub_handler(
 ) -> Response<Body> {
     let client = reqwest::Client::new();
     let webclient = WebClient::new(client);
-    let event_handler = EventHandler::new(webclient);
+
+    let mut event_handler = EventHandler::default();
+    event_handler.register(
+        state.config.feed_mods_rewards_id.clone(),
+        ModFeed { client: webclient },
+    );
+    event_handler.register(
+        state.config.rubberduck_rewards_id.clone(),
+        DuckRedeemed {
+            dynamo_client: state.dynamo_client,
+        },
+    );
 
     match event_handler.handle(body, &headers, &state.config).await {
         Ok(resp) => resp,
@@ -197,7 +227,9 @@ async fn main() -> Result<(), Error> {
     println!("Hello, world!");
 
     let config = AppConfig::from_env();
-    let state = AppState::new(config);
+    let aws_cfg = aws_config::load_defaults(BehaviorVersion::latest()).await;
+    let dynamo_client = Client::new(&aws_cfg);
+    let state = AppState::new(config, dynamo_client);
 
     let app = Router::new()
         .route("/health", get(healthcheck))

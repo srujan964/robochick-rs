@@ -81,6 +81,16 @@ pub mod twitch {
         redeemed_at: String,
     }
 
+    impl RewardEvent {
+        pub(crate) fn username(&self) -> &str {
+            &self.user_login
+        }
+
+        pub(crate) fn redeemed_at(&self) -> &str {
+            &self.redeemed_at
+        }
+    }
+
     #[derive(Serialize, Deserialize, Debug)]
     pub struct Condition {
         broadcaster_user_id: String,
