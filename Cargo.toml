@@ -8,14 +8,9 @@ anyhow = "1.0.99"
 async-trait = "0.1.89"
 aws-config = { version = "1.8.18", default-features = false, features = [
     "behavior-version-latest",
-    "rustls",
 ] }
-aws-sdk-dynamodb =  { version = "1.116.0", default-features = false, features = [
-    "rustls",
-]}
-aws-sdk-secretsmanager = { version = "1.108.0", default-features = false, features = [
-    "rustls",
-] }
+aws-sdk-dynamodb =  { version = "1.116.0" }
+aws-sdk-secretsmanager = { version = "1.108.0"}
 axum = "0.8.4"
 chrono = "0.4.45"
 fastrand = "2.3.0"
