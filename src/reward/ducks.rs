@@ -16,6 +16,7 @@ impl RewardHandler for DuckRedeemed {
         config: &AppConfig,
     ) -> Result<()> {
         let username = redeem.event.username();
+        let display_name = redeem.event.display_name();
         let redemption_ts = redeem.event.redeemed_at();
         let now_ts = chrono::Utc::now().to_rfc3339();
 
@@ -25,6 +26,7 @@ impl RewardHandler for DuckRedeemed {
             .table_name(config.duck_rewards_table_name.clone())
             .item("message_id", AttributeValue::S(msg_id.clone()))
             .item("username", AttributeValue::S(username.to_string()))
+            .item("display_name", AttributeValue::S(display_name.to_string()))
             .item("redeemed_at", AttributeValue::S(redemption_ts.to_string()))
             .item("processed_at", AttributeValue::S(now_ts))
             .condition_expression("attribute_not_exists(message_id)")
@@ -70,6 +72,7 @@ mod tests {
         let payload = std::fs::read_to_string(payload_path)?;
         let redemption: RewardRedeemed = serde_json::from_str::<RewardRedeemed>(&payload)?;
         let expected_username = redemption.event.username().to_string();
+        let expected_display_name = redemption.event.display_name().to_string();
         let expected_redeemed_at = redemption.event.redeemed_at().to_string();
 
         let mut expected_attrs: HashMap<String, AttributeValue> = HashMap::new();
@@ -82,6 +85,7 @@ mod tests {
 
                 attr("message_id") == Some("Message-Id")
                     && attr("username") == Some(&expected_username)
+                    && attr("display_name") == Some(&expected_display_name)
                     && attr("redeemed_at") == Some(&expected_redeemed_at)
                     && attr("processed_at")
                         .map(|d| chrono::DateTime::parse_from_rfc3339(d).is_ok())

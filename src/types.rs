@@ -86,6 +86,10 @@ pub mod twitch {
             &self.user_login
         }
 
+        pub(crate) fn display_name(&self) -> &str {
+            &self.user_name
+        }
+
         pub(crate) fn redeemed_at(&self) -> &str {
             &self.redeemed_at
         }
