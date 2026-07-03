@@ -60,7 +60,10 @@ impl StreamelementsCaller for WebClient {
                 }
             }
 
-            Err(e) => Err(anyhow!("Failed to make request to Streamelements API: {e}")),
+            Err(e) => Err(anyhow!(
+                "Failed to make request to Streamelements API: {}",
+                e.without_url()
+            )),
         }
     }
 }
