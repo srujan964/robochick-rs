@@ -26,7 +26,7 @@ impl<C: StreamelementsCaller> RewardHandler for ModFeed<C> {
         let message_components: MessageComponents = match read_config(&msg_config_path) {
             Ok(m) => m,
             Err(e) => {
-                println!("Error reading message configuration file: {e}");
+                eprintln!("Error reading message configuration file: {e}");
                 return Ok(());
             }
         };
@@ -35,7 +35,7 @@ impl<C: StreamelementsCaller> RewardHandler for ModFeed<C> {
         let message = match Robochick::build_from_templates(&message_components, &mut rng) {
             Ok(m) => m,
             Err(e) => {
-                println!("Failed to build message: {e}");
+                eprintln!("Failed to build message: {e}");
                 return Ok(());
             }
         };
@@ -47,7 +47,7 @@ impl<C: StreamelementsCaller> RewardHandler for ModFeed<C> {
                 Ok(())
             }
             Err(e) => {
-                println!("Streamelements API request failed: {e}");
+                eprintln!("Streamelements API request failed: {e}");
                 Ok(())
             }
         };

@@ -139,7 +139,7 @@ async fn oauth_handler(
         let resp = match reqwest::Client::new().post(url.unwrap()).send().await {
             Ok(resp) => resp,
             Err(e) => {
-                println!(
+                eprintln!(
                     "Failed to create auth token, attempted to call /oauth2/token API. Caused by: {}",
                     e.without_url()
                 );
@@ -153,7 +153,7 @@ async fn oauth_handler(
         let oauth_response = match resp.text().await {
             Ok(response) => response,
             Err(e) => {
-                println!("Error decoding data from oauth API response");
+                eprintln!("Error decoding data from oauth API response");
                 return Response::builder()
                     .status(StatusCode::INTERNAL_SERVER_ERROR)
                     .body(Body::Empty)
@@ -163,7 +163,7 @@ async fn oauth_handler(
 
         match auth::securely_store_oauth_tokens(oauth_response).await {
             Ok(secret_name) => println!("Successfully stored in {secret_name}"),
-            Err(e) => println!("Failed to store oauth response: {e}"),
+            Err(e) => eprintln!("Failed to store oauth response: {e}"),
         }
 
         return Response::builder()
@@ -184,7 +184,7 @@ async fn oauth_handler(
             .unwrap();
     }
 
-    println!("Authorization request from Twitch is missing code and/or scopes param");
+    eprintln!("Authorization request from Twitch is missing code and/or scopes param");
 
     Response::builder()
         .status(StatusCode::BAD_REQUEST)
@@ -215,7 +215,7 @@ async fn eventsub_handler(
     match event_handler.handle(body, &headers, &state.config).await {
         Ok(resp) => resp,
         Err(e) => {
-            println!("Event handling failed with error: {}", e);
+            eprintln!("Event handling failed with error: {}", e);
 
             Response::builder()
                 .status(StatusCode::INTERNAL_SERVER_ERROR)

@@ -44,7 +44,7 @@ pub async fn securely_store_oauth_tokens(token_response: String) -> anyhow::Resu
                 Err(anyhow!("Secret creation failed"))
             }
             other => {
-                println!("Unknown error when checking if secret already exists");
+                eprintln!("Unknown error when checking if secret already exists");
                 Err(anyhow!(other))
             }
         },
@@ -61,7 +61,7 @@ async fn update_existing_secret(name: &str, val: &str, client: &Client) -> anyho
     {
         Ok(_) => Ok(()),
         Err(e) => {
-            println!("Secret update failed: {e}");
+            eprintln!("Secret update failed: {e}");
             Err(anyhow!(e))
         }
     }
@@ -77,7 +77,7 @@ async fn create_new_secret(name: &str, val: &str, client: &Client) -> anyhow::Re
     {
         Ok(_) => Ok(()),
         Err(e) => {
-            println!("Secret creation failed: {e}");
+            eprintln!("Secret creation failed: {e}");
             Err(anyhow!(e))
         }
     }

@@ -36,7 +36,7 @@ impl RewardHandler for DuckRedeemed {
         {
             Ok(_) => Ok(()),
             Err(SdkError::ServiceError(e)) if e.err().is_conditional_check_failed_exception() => {
-                println!(
+                eprintln!(
                     "A record with this message-id {} already exists, ignoring.",
                     msg_id
                 );

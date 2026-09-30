@@ -62,7 +62,7 @@ pub mod event_handler {
                     event.subscription_status()
                 );
             } else {
-                println!("Failed to parse payload");
+                eprintln!("Failed to parse payload");
             }
         }
 
@@ -80,13 +80,13 @@ pub mod event_handler {
                 let event = match serde_json::from_str::<RewardRedeemed>(payload) {
                     Ok(s) => s,
                     Err(e) => {
-                        println!("Failed to deserialize event to RewardRedeemed type: {e}");
+                        eprintln!("Failed to deserialize event to RewardRedeemed type: {e}");
                         return Err(anyhow!("{e}"));
                     }
                 };
 
                 if event.broadcaster_user_id() != config.broadcaster_user_id {
-                    println!(
+                    eprintln!(
                         "Invalid notification: unknown broadcaster user id {}",
                         event.broadcaster_user_id(),
                     );
@@ -101,7 +101,7 @@ pub mod event_handler {
                 match self.handlers.get(event.reward_id()) {
                     Some(h) => h.handle(msg_id.to_string(), &event, config).await,
                     None => {
-                        println!(
+                        eprintln!(
                             "Invalid notification: unknown reward id {}",
                             event.reward_id(),
                         );
