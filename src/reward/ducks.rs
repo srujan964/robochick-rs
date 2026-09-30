@@ -29,6 +29,7 @@ impl RewardHandler for DuckRedeemed {
             .item("display_name", AttributeValue::S(display_name.to_string()))
             .item("redeemed_at", AttributeValue::S(redemption_ts.to_string()))
             .item("processed_at", AttributeValue::S(now_ts))
+            .item("recorded", AttributeValue::Bool(false))
             .condition_expression("attribute_not_exists(message_id)")
             .send()
             .await
@@ -90,6 +91,10 @@ mod tests {
                     && attr("processed_at")
                         .map(|d| chrono::DateTime::parse_from_rfc3339(d).is_ok())
                         .unwrap_or(false)
+                    && r.item().is_some_and(|m| {
+                        m.get("recorded")
+                            .is_some_and(|v| v.as_bool().is_ok_and(|b| !b))
+                    })
             })
             .then_output(|| PutItemOutput::builder().build());
 
