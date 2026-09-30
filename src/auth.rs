@@ -10,22 +10,28 @@ use aws_sdk_secretsmanager::{
     },
 };
 
-pub async fn securely_store_oauth_tokens(token_response: String) -> anyhow::Result<String> {
+pub async fn securely_store_oauth_tokens(
+    token_response: String,
+    secret_name: String,
+) -> anyhow::Result<String> {
     let region = RegionProviderChain::default_provider().or_else("eu-west-2");
     let config = aws_config::from_env().region(region).load().await;
     let client = aws_sdk_secretsmanager::Client::new(&config);
 
-    let name = "robochick_rs_twitch_oauth";
-
-    match client.get_secret_value().secret_id(name).send().await {
+    match client
+        .get_secret_value()
+        .secret_id(&secret_name)
+        .send()
+        .await
+    {
         Ok(secret_val) => {
             println!("Secret already exists. Attempting update");
-            if update_existing_secret(name, token_response.as_ref(), &client)
+            if update_existing_secret(&secret_name, token_response.as_ref(), &client)
                 .await
                 .is_ok()
             {
                 println!("Secret updated successfully.");
-                return Ok(name.to_string());
+                return Ok(secret_name.to_string());
             }
 
             Err(anyhow!("Secret update failed"))
@@ -33,12 +39,12 @@ pub async fn securely_store_oauth_tokens(token_response: String) -> anyhow::Resu
         Err(e) => match e.into_service_error() {
             GetSecretValueError::ResourceNotFoundException(_) => {
                 println!("Secret doesn't exist, creating one");
-                if create_new_secret(name, token_response.as_ref(), &client)
+                if create_new_secret(&secret_name, token_response.as_ref(), &client)
                     .await
                     .is_ok()
                 {
                     println!("Secret created successfully.");
-                    return Ok(name.to_string());
+                    return Ok(secret_name.to_string());
                 }
 
                 Err(anyhow!("Secret creation failed"))

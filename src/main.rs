@@ -45,6 +45,7 @@ pub mod config {
         pub message_components_config_path: String,
         pub rubberduck_rewards_id: String,
         pub duck_rewards_table_name: String,
+        pub auth_secret_name: String,
     }
 
     impl AppConfig {
@@ -73,6 +74,8 @@ pub mod config {
                     .expect("Missing RUBBERDUCK_REWARD_ID env var"),
                 duck_rewards_table_name: env::var("DUCK_REWARDS_TABLE_NAME")
                     .expect("Missing DUCK_REWARDS_TABLE_NAME env var"),
+                auth_secret_name: env::var("AUTH_SECRET_NAME")
+                    .expect("Missing AUTH_SECRET_NAME env var"),
             }
         }
 
@@ -161,7 +164,8 @@ async fn oauth_handler(
             }
         };
 
-        match auth::securely_store_oauth_tokens(oauth_response).await {
+        match auth::securely_store_oauth_tokens(oauth_response, state.config.auth_secret_name).await
+        {
             Ok(secret_name) => println!("Successfully stored in {secret_name}"),
             Err(e) => eprintln!("Failed to store oauth response: {e}"),
         }

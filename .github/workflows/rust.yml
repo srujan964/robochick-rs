@@ -25,6 +25,7 @@ jobs:
         echo MESSAGE_COMPONENTS_CONFIG_PATH="resources/config/message_components.json" >> .env.test
         echo RUBBERDUCK_REWARD_ID="0cc22610-1925-439f-8e61-27b3280e0c2a" >> .env.test
         echo DUCK_REWARDS_TABLE_NAME="test-table" >> .env.test
+        echo AUTH_SECRET_NAME="secret-name" >> .env.test
     - name: Install cargo toolchain
       uses: dtolnay/rust-toolchain@stable
     - name: Cache deps
