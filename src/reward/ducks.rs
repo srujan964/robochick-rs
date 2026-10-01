@@ -2,6 +2,7 @@ use crate::{config::AppConfig, reward::RewardHandler, types::twitch::RewardRedee
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use aws_sdk_dynamodb::{Client, error::SdkError, types::AttributeValue};
+use chrono::{DateTime, Utc};
 
 pub struct DuckRedeemed {
     pub dynamo_client: Client,
@@ -18,7 +19,12 @@ impl RewardHandler for DuckRedeemed {
         let username = redeem.event.username();
         let display_name = redeem.event.display_name();
         let redemption_ts = redeem.event.redeemed_at();
-        let now_ts = chrono::Utc::now().to_rfc3339();
+        let now = Utc::now();
+
+        let redeem_date: String = match DateTime::parse_from_rfc3339(redeem.event.redeemed_at()) {
+            Ok(d) => d.with_timezone(&Utc).format("%Y-%m-%d").to_string(),
+            Err(_) => now.format("%Y-%m-%d").to_string(),
+        };
 
         match self
             .dynamo_client
@@ -27,8 +33,9 @@ impl RewardHandler for DuckRedeemed {
             .item("message_id", AttributeValue::S(msg_id.clone()))
             .item("username", AttributeValue::S(username.to_string()))
             .item("display_name", AttributeValue::S(display_name.to_string()))
+            .item("date", AttributeValue::S(redeem_date))
             .item("redeemed_at", AttributeValue::S(redemption_ts.to_string()))
-            .item("processed_at", AttributeValue::S(now_ts))
+            .item("processed_at", AttributeValue::S(now.to_rfc3339()))
             .item("recorded", AttributeValue::Bool(false))
             .condition_expression("attribute_not_exists(message_id)")
             .send()
@@ -87,6 +94,7 @@ mod tests {
                 attr("message_id") == Some("Message-Id")
                     && attr("username") == Some(&expected_username)
                     && attr("display_name") == Some(&expected_display_name)
+                    && attr("date") == Some("2020-07-15")
                     && attr("redeemed_at") == Some(&expected_redeemed_at)
                     && attr("processed_at")
                         .map(|d| chrono::DateTime::parse_from_rfc3339(d).is_ok())
