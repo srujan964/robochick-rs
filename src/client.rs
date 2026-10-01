@@ -11,7 +11,7 @@ pub struct WebClient {
 }
 
 impl WebClient {
-    pub fn new(client: Client) -> WebClient {
+    pub fn new(client: reqwest::Client) -> WebClient {
         WebClient { client }
     }
 }

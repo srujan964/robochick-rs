@@ -217,7 +217,10 @@ async fn eventsub_handler(
     );
 
     match event_handler.handle(body, &headers, &state.config).await {
-        Ok(resp) => resp,
+        Ok(resp) => {
+            println!("Successfully handled event");
+            resp
+        }
         Err(e) => {
             eprintln!("Event handling failed with error: {}", e);
 
@@ -231,8 +234,6 @@ async fn eventsub_handler(
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    println!("Hello, world!");
-
     let config = AppConfig::from_env();
     let aws_cfg = aws_config::from_env()
         .region(RegionProviderChain::default_provider().or_else("eu-west-2"))
