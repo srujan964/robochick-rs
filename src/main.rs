@@ -9,7 +9,10 @@ use axum::{
     http::HeaderMap,
     routing::{get, post},
 };
-use lambda_http::{Body, Error, Response};
+use lambda_http::{
+    Body, Error, Response,
+    tracing::{self, instrument, subscriber},
+};
 use reqwest::{StatusCode, Url};
 use tokio::sync::OnceCell;
 
@@ -142,9 +145,9 @@ async fn oauth_handler(
         let resp = match reqwest::Client::new().post(url.unwrap()).send().await {
             Ok(resp) => resp,
             Err(e) => {
-                eprintln!(
-                    "Failed to create auth token, attempted to call /oauth2/token API. Caused by: {}",
-                    e.without_url()
+                tracing::error!(
+                    original_err = %e.without_url(),
+                    "Failed to create auth token via /oauth2/token"
                 );
                 return Response::builder()
                     .status(StatusCode::INTERNAL_SERVER_ERROR)
@@ -156,7 +159,7 @@ async fn oauth_handler(
         let oauth_response = match resp.text().await {
             Ok(response) => response,
             Err(e) => {
-                eprintln!("Error decoding data from oauth API response");
+                tracing::error!("Error decoding data from oauth API response");
                 return Response::builder()
                     .status(StatusCode::INTERNAL_SERVER_ERROR)
                     .body(Body::Empty)
@@ -166,8 +169,11 @@ async fn oauth_handler(
 
         match auth::securely_store_oauth_tokens(oauth_response, state.config.auth_secret_name).await
         {
-            Ok(secret_name) => println!("Successfully stored in {secret_name}"),
-            Err(e) => eprintln!("Failed to store oauth response: {e}"),
+            Ok(secret_name) => tracing::info!(
+                secret = %secret_name,
+                "Successfully stored oauth token"
+            ),
+            Err(e) => tracing::error!(err = %e,"Failed to store oauth response"),
         }
 
         return Response::builder()
@@ -179,7 +185,10 @@ async fn oauth_handler(
 
     if let (Some(error), Some(error_desc)) = (params.get("error"), params.get("error_description"))
     {
-        println!("Authorization denied by user :( Error: {error} and description: {error_desc}");
+        tracing::info!(
+             %error, %error_desc ,
+            "Authorization denied by user :("
+        );
 
         return Response::builder()
             .status(StatusCode::OK)
@@ -188,7 +197,7 @@ async fn oauth_handler(
             .unwrap();
     }
 
-    eprintln!("Authorization request from Twitch is missing code and/or scopes param");
+    tracing::error!("Authorization request from Twitch is missing code and/or scopes param");
 
     Response::builder()
         .status(StatusCode::BAD_REQUEST)
@@ -218,11 +227,11 @@ async fn eventsub_handler(
 
     match event_handler.handle(body, &headers, &state.config).await {
         Ok(resp) => {
-            println!("Successfully handled event");
+            tracing::info!("Successfully handled event");
             resp
         }
         Err(e) => {
-            eprintln!("Event handling failed with error: {}", e);
+            tracing::error!(err = %e, "Event handling failed");
 
             Response::builder()
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
@@ -234,6 +243,15 @@ async fn eventsub_handler(
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
+    subscriber::fmt()
+        .json()
+        .with_max_level(tracing::Level::INFO)
+        .with_current_span(false)
+        .with_ansi(false)
+        .without_time()
+        .with_target(false)
+        .init();
+
     let config = AppConfig::from_env();
     let aws_cfg = aws_config::from_env()
         .region(RegionProviderChain::default_provider().or_else("eu-west-2"))

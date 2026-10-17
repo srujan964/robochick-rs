@@ -9,6 +9,7 @@ use aws_sdk_secretsmanager::{
         update_secret::{UpdateSecretError, UpdateSecretOutput},
     },
 };
+use lambda_http::tracing;
 
 pub async fn securely_store_oauth_tokens(
     token_response: String,
@@ -25,12 +26,12 @@ pub async fn securely_store_oauth_tokens(
         .await
     {
         Ok(secret_val) => {
-            println!("Secret already exists. Attempting update");
+            tracing::info!(%secret_name,"Secret already exists. Attempting update");
             if update_existing_secret(&secret_name, token_response.as_ref(), &client)
                 .await
                 .is_ok()
             {
-                println!("Secret updated successfully.");
+                tracing::info!(%secret_name, "Secret updated successfully.");
                 return Ok(secret_name.to_string());
             }
 
@@ -38,19 +39,21 @@ pub async fn securely_store_oauth_tokens(
         }
         Err(e) => match e.into_service_error() {
             GetSecretValueError::ResourceNotFoundException(_) => {
-                println!("Secret doesn't exist, creating one");
+                tracing::info!(%secret_name,"Secret doesn't exist, creating one");
                 if create_new_secret(&secret_name, token_response.as_ref(), &client)
                     .await
                     .is_ok()
                 {
-                    println!("Secret created successfully.");
+                    tracing::info!(%secret_name,"Secret created successfully.");
                     return Ok(secret_name.to_string());
                 }
 
                 Err(anyhow!("Secret creation failed"))
             }
             other => {
-                eprintln!("Unknown error when checking if secret already exists");
+                tracing::error!(
+                    %secret_name,"Unknown error when checking if secret already exists"
+                );
                 Err(anyhow!(other))
             }
         },
@@ -67,7 +70,7 @@ async fn update_existing_secret(name: &str, val: &str, client: &Client) -> anyho
     {
         Ok(_) => Ok(()),
         Err(e) => {
-            eprintln!("Secret update failed: {e}");
+            tracing::error!(err = %e, secret_name = %name, "Secret update failed");
             Err(anyhow!(e))
         }
     }
@@ -83,7 +86,7 @@ async fn create_new_secret(name: &str, val: &str, client: &Client) -> anyhow::Re
     {
         Ok(_) => Ok(()),
         Err(e) => {
-            eprintln!("Secret creation failed: {e}");
+            tracing::error!(err = %e, secret_name = %name, "Secret creation failed");
             Err(anyhow!(e))
         }
     }

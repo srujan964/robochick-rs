@@ -8,6 +8,7 @@ use crate::{
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use fastrand::Rng;
+use lambda_http::tracing;
 use std::path::PathBuf;
 
 pub struct ModFeed<C: StreamelementsCaller> {
@@ -26,7 +27,7 @@ impl<C: StreamelementsCaller> RewardHandler for ModFeed<C> {
         let message_components: MessageComponents = match read_config(&msg_config_path) {
             Ok(m) => m,
             Err(e) => {
-                eprintln!("Error reading message configuration file: {e}");
+                tracing::error!(err = %e, "Error reading message configuration file");
                 return Ok(());
             }
         };
@@ -35,19 +36,19 @@ impl<C: StreamelementsCaller> RewardHandler for ModFeed<C> {
         let message = match Robochick::build_from_templates(&message_components, &mut rng) {
             Ok(m) => m,
             Err(e) => {
-                eprintln!("Failed to build message: {e}");
+                tracing::error!(err = %e, "Failed to build message");
                 return Ok(());
             }
         };
 
-        println!("Message built: {}", &message);
+        tracing::info!("Message built");
         return match self.client.say(&message, config).await {
             Ok(resp) => {
-                println!("Successfully posted message in chat!");
+                tracing::info!("Successfully posted message in chat!");
                 Ok(())
             }
             Err(e) => {
-                eprintln!("Streamelements API request failed: {e}");
+                tracing::error!(err = %e, "Streamelements API request failed");
                 Ok(())
             }
         };

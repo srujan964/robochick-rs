@@ -27,3 +27,6 @@ curl-format.txt
 
 # local only folders
 out
+
+# personal notes file
+notes.md

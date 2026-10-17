@@ -2,6 +2,7 @@ pub mod twitch {
     use std::{collections::HashMap, error, fmt, iter::zip, vec};
 
     use fastrand::Rng;
+    use lambda_http::tracing;
     use serde::{Deserialize, Serialize};
 
     #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -126,6 +127,8 @@ pub mod twitch {
                 let n = scenario_pick.get_others().len();
 
                 let picks = pick_random(mods, m + n, rng);
+
+                tracing::info!(?picks, template = %scenario_pick.template, "Picks made");
 
                 /**
                  * Calling `pick_random()` once for each `m` and `n` had an edge case where

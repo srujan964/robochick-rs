@@ -3,6 +3,7 @@ use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use aws_sdk_dynamodb::{Client, error::SdkError, types::AttributeValue};
 use chrono::{DateTime, Utc};
+use lambda_http::tracing;
 
 pub struct DuckRedeemed {
     pub dynamo_client: Client,
@@ -43,9 +44,9 @@ impl RewardHandler for DuckRedeemed {
         {
             Ok(_) => Ok(()),
             Err(SdkError::ServiceError(e)) if e.err().is_conditional_check_failed_exception() => {
-                eprintln!(
-                    "A record with this message-id {} already exists, ignoring.",
-                    msg_id
+                tracing::error!(
+                    %msg_id,
+                    "A record with this message-id already exists, ignoring.",
                 );
                 Ok(())
             }

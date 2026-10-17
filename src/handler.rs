@@ -56,13 +56,13 @@ pub mod event_handler {
 
         fn handle_revocation(payload: &str, headers: &HeaderMap, config: &AppConfig) {
             if let Ok(event) = serde_json::from_str::<RevocationEvent>(payload) {
-                println!(
-                    "Subscription revoked for {} with reason: {}",
-                    event.subscription_type(),
-                    event.subscription_status()
+                tracing::info!(
+                    sub_type = %event.subscription_type(),
+                    reason = %event.subscription_status(),
+                    "Subscription revoked",
                 );
             } else {
-                eprintln!("Failed to parse payload");
+                tracing::error!("Failed to parse payload");
             }
         }
 
@@ -80,15 +80,18 @@ pub mod event_handler {
                 let event = match serde_json::from_str::<RewardRedeemed>(payload) {
                     Ok(s) => s,
                     Err(e) => {
-                        eprintln!("Failed to deserialize event to RewardRedeemed type: {e}");
+                        tracing::error!(
+                            err = %e,
+                            "Failed to deserialize event to RewardRedeemed type"
+                        );
                         return Err(anyhow!("{e}"));
                     }
                 };
 
                 if event.broadcaster_user_id() != config.broadcaster_user_id {
-                    eprintln!(
-                        "Invalid notification: unknown broadcaster user id {}",
-                        event.broadcaster_user_id(),
+                    tracing::error!(
+                        id = %event.broadcaster_user_id(),
+                        "Invalid notification: unknown broadcaster user id",
                     );
                     return Err(anyhow!("Unknown notification"));
                 }
@@ -101,9 +104,9 @@ pub mod event_handler {
                 match self.handlers.get(event.reward_id()) {
                     Some(h) => h.handle(msg_id.to_string(), &event, config).await,
                     None => {
-                        eprintln!(
-                            "Invalid notification: unknown reward id {}",
-                            event.reward_id(),
+                        tracing::error!(
+                            id = %event.reward_id(),
+                            "Invalid notification: unknown reward id",
                         );
                         Err(anyhow!("Unknown notification"))
                     }
@@ -126,7 +129,10 @@ pub mod event_handler {
             match EventHandler::verify(&request, headers, config) {
                 Ok(_) => (),
                 Err(e) => {
-                    eprintln!("Unverified event. Error: {e}");
+                    tracing::error!(
+                        err = %e,
+                        "Unverified event."
+                    );
                     let resp = Response::builder()
                         .status(StatusCode::FORBIDDEN)
                         .body(Body::Empty)
@@ -157,7 +163,7 @@ pub mod event_handler {
                 MessageType::WebhookCallbackVerification => {
                     if let Ok(challenge) = EventHandler::handle_challenge(&request, headers, config)
                     {
-                        println!("Responding to challenge request with: {challenge}");
+                        tracing::info!("Responding to challenge request with: {challenge}");
 
                         Response::builder()
                             .status(StatusCode::OK)
