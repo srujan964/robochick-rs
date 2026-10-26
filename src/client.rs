@@ -33,7 +33,7 @@ impl StreamelementsCaller for WebClient {
     async fn say(&self, msg: &str, config: &AppConfig) -> Result<String> {
         let host = config.se_api_host.clone();
         let mut url = Url::parse(&host)?;
-        url = url.join(format!("kappa/v2/bot/{}/say", &config.twitch_channel_id).as_ref())?;
+        url = url.join(format!("kappa/v2/bot/{}/say", config.twitch_channel_id).as_ref())?;
 
         let mut req_body: HashMap<String, String> = HashMap::new();
         req_body.insert("message".to_string(), String::from(msg));
@@ -79,7 +79,7 @@ mod tests {
     use crate::{
         client::{StreamelementsCaller, WebClient},
         config::AppConfig,
-        robochick::twitch::MessageComponents,
+        robochick::twitch::Templates,
     };
 
     #[tokio::test]
@@ -100,10 +100,10 @@ mod tests {
             .mock("POST", "/kappa/v2/bot/test_channel_id/say")
             .match_header(
                 "Authorization",
-                mockito::Matcher::Exact(format!("Bearer {}", &config.se_jwt.as_ref().unwrap())),
+                mockito::Matcher::Exact(format!("Bearer {}", config.se_jwt.as_ref().unwrap())),
             )
             .match_body(expected_body)
-            .with_body(&response_body)
+            .with_body(response_body)
             .create_async()
             .await;
 
@@ -136,7 +136,7 @@ mod tests {
             .mock("POST", "/kappa/v2/bot/test_channel_id/say")
             .match_header(
                 "Authorization",
-                mockito::Matcher::Exact(format!("Bearer {}", &config.se_jwt.as_ref().unwrap())),
+                mockito::Matcher::Exact(format!("Bearer {}", config.se_jwt.as_ref().unwrap())),
             )
             .match_body(expected_body)
             .with_status(400)

@@ -1,14 +1,24 @@
 pub mod twitch {
-    use std::{collections::HashMap, error, fmt, iter::zip, vec};
+    use std::{collections::HashMap, error, fmt, iter::zip};
 
-    use fastrand::Rng;
     use lambda_http::tracing;
+    use rand::{
+        Rng,
+        distr::{Distribution, weighted::WeightedIndex},
+        seq::IndexedRandom,
+    };
     use serde::{Deserialize, Serialize};
 
     #[derive(Serialize, Deserialize, Debug, Clone)]
-    pub struct MessageComponents {
+    pub struct Templates {
         pub(crate) scenarios: Vec<Scenario>,
-        pub(crate) mods: Vec<String>,
+        pub(crate) mods: Vec<Mod>,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    pub struct Mod {
+        pub(crate) name: String,
+        pub(crate) weight: f64,
     }
 
     #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -16,6 +26,8 @@ pub mod twitch {
         pub(crate) template: String,
         pub(crate) winners: Vec<String>,
         pub(crate) others: Vec<String>,
+        pub(crate) history: Option<Vec<Vec<u64>>>,
+        pub(crate) correction_weights: Option<Vec<Vec<f64>>>,
     }
 
     #[derive(Debug)]
@@ -23,6 +35,7 @@ pub mod twitch {
         NotEnoughPlaceholders(String),
         InvalidValue(String),
         PickFailed(String),
+        InvalidWeights,
     }
 
     impl fmt::Display for ScenarioError {
@@ -31,6 +44,7 @@ pub mod twitch {
                 ScenarioError::InvalidValue(s) => write!(f, "InvalidValue({s})"),
                 ScenarioError::NotEnoughPlaceholders(s) => write!(f, "NotEnoughPlaceholders({s})"),
                 ScenarioError::PickFailed(s) => write!(f, "PickFailed({s})"),
+                ScenarioError::InvalidWeights => write!(f, "InvalidWeights"),
             }
         }
     }
@@ -50,11 +64,7 @@ pub mod twitch {
             &self.others
         }
 
-        pub fn build(
-            &self,
-            winners: &[String],
-            others: &[String],
-        ) -> Result<String, ScenarioError> {
+        pub fn build(&self, winners: &[&str], others: &[&str]) -> Result<String, ScenarioError> {
             if self.winners.len() != winners.len() {
                 return Err(ScenarioError::NotEnoughPlaceholders(format!(
                     "Expected {} values, found {}",
@@ -89,20 +99,24 @@ pub mod twitch {
         }
     }
 
-    impl MessageComponents {
-        pub fn get_mods(&self) -> &[String] {
+    impl Templates {
+        pub fn get_mods(&self) -> &[Mod] {
             &self.mods
         }
 
         pub fn get_scenarios(&self) -> &[Scenario] {
             &self.scenarios
         }
+
+        pub fn default_weights(&self) -> Vec<f64> {
+            self.mods.iter().map(|m| m.weight).collect()
+        }
     }
 
     pub trait MessageBuilder {
         fn build_from_templates(
-            message_components: &MessageComponents,
-            rng: &mut Rng,
+            templates: &Templates,
+            rng: &mut impl rand::Rng,
         ) -> Result<String, ScenarioError>;
     }
 
@@ -114,121 +128,137 @@ pub mod twitch {
         }
     }
 
-    impl MessageBuilder for Robochick {
-        fn build_from_templates(
-            message_components: &MessageComponents,
-            rng: &mut Rng,
-        ) -> Result<String, ScenarioError> {
-            let mods: &[String] = message_components.get_mods();
-            let scenarios: &[Scenario] = message_components.get_scenarios();
-
-            if let Some(scenario_pick) = pick_random(scenarios, 1, rng).pop() {
-                let m = scenario_pick.get_winners().len();
-                let n = scenario_pick.get_others().len();
-
-                let picks = pick_random(mods, m + n, rng);
-
-                tracing::info!(?picks, template = %scenario_pick.template, "Picks made");
-
-                /**
-                 * Calling `pick_random()` once for each `m` and `n` had an edge case where
-                 * it picked the same element into both vecs.
-                 * `fastrand::Rng::choose_multiple()` randomly samples elements so making all the picks
-                 *  in one go and then using `split_at_checked()` makes sure they are mutually exclusive.
-                 */
-                let (winners, others) = match picks.split_at_checked(m) {
-                    Some((x, y)) => (x, y),
-                    None => {
-                        return Err(ScenarioError::PickFailed(
-                            "Failed to pick {m + n} mods".into(),
-                        ));
-                    }
-                };
-
-                scenario_pick.build(winners, others)
-            } else {
-                Err(ScenarioError::PickFailed(
-                    "Failed to select a scenario".into(),
-                ))
-            }
+    impl Default for Robochick {
+        fn default() -> Self {
+            Self::new()
         }
     }
 
-    fn pick_random<T: Clone>(haystack: &[T], amount: usize, rng: &mut Rng) -> Vec<T> {
-        if haystack.is_empty() || amount == 0 {
-            return vec![];
-        }
+    impl MessageBuilder for Robochick {
+        fn build_from_templates(
+            templates: &Templates,
+            rng: &mut impl rand::Rng,
+        ) -> Result<String, ScenarioError> {
+            let mods: &[Mod] = templates.get_mods();
+            let scenarios: &[Scenario] = templates.get_scenarios();
 
-        if amount == 1 {
-            return match rng.choice(haystack) {
-                Some(pick) => vec![pick.clone()],
-                None => vec![],
-            };
+            scenarios
+                .choose(rng)
+                .map(|scenario| populate(scenario, templates, rng))
+                .unwrap_or(Err(ScenarioError::PickFailed(
+                    "Failed to select a scenario".into(),
+                )))
         }
+    }
 
-        rng.choose_multiple(haystack, amount)
-            .into_iter()
-            .cloned()
-            .collect()
+    fn populate(
+        scenario: &Scenario,
+        templates: &Templates,
+        rng: &mut impl rand::Rng,
+    ) -> Result<String, ScenarioError> {
+        let m = scenario.winners.len();
+        let n = scenario.others.len();
+        let amount = m + n;
+        let mut remaining: Vec<usize> = (0..amount).collect();
+        let mut picks: Vec<&str> = Vec::with_capacity(amount);
+
+        if let Some(weights) = &scenario.correction_weights {
+            for weights_at_pos in weights.iter().take(amount) {
+                let current_weights: Vec<f64> =
+                    remaining.iter().map(|&i| weights_at_pos[i]).collect();
+                let dist: WeightedIndex<f64> = WeightedIndex::new(&current_weights)
+                    .map_err(|_| ScenarioError::InvalidWeights)?;
+
+                let selection_idx = dist.sample(rng);
+                let selection = &templates.mods[remaining.remove(selection_idx)];
+                picks.push(&selection.name);
+            }
+        } else {
+            picks.extend(templates.mods.sample(rng, amount).map(|m| m.name.as_str()));
+        }
+        tracing::info!(?picks, templates = %scenario.template, "Picks made");
+
+        scenario.build(&picks[..m], &picks[m..])
     }
 
     #[cfg(test)]
     mod tests {
+        use crate::robochick::twitch::{MessageBuilder, Mod, Robochick, Scenario, Templates};
         use anyhow::Result;
-        use fastrand::Rng;
+        use rand::{SeedableRng, rngs::SmallRng};
 
-        use crate::robochick::twitch::{
-            MessageBuilder, MessageComponents, Robochick, Scenario, pick_random,
-        };
+        fn populate_scenario_with_default_weights() -> Result<()> {
+            let scenario = Scenario {
+                template: "{winner} is the winner.".into(),
+                winners: vec!["winner".into()],
+                others: vec![],
+                history: None,
+                correction_weights: None,
+            };
+            let mods: Vec<Mod> = vec![
+                Mod {
+                    name: "John".into(),
+                    weight: 1.0,
+                },
+                Mod {
+                    name: "Jane".into(),
+                    weight: 0.0,
+                },
+            ];
+            let templates = Templates {
+                scenarios: vec![scenario],
+                mods,
+            };
+            let mut rng: SmallRng = rand::make_rng();
+            let message = Robochick::build_from_templates(&templates, &mut rng)?;
 
-        #[test]
-        fn pick_random_chooses_a_single_random_moderator() -> Result<()> {
-            let mods: Vec<String> =
-                vec!["John".into(), "Jane".into(), "Alex".into(), "Krish".into()];
-            let mut rng = Rng::with_seed(1_000);
-
-            let mut result = pick_random(&mods, 1, &mut rng);
-
-            assert_eq!(result.len(), 1);
-            let first_result = result.pop().unwrap();
-            assert!(mods.iter().any(|e| *e == first_result));
+            assert_eq!("John is the winner.".to_owned(), message);
             Ok(())
         }
 
         #[test]
-        fn pick_random_chooses_multiple_mods() -> Result<()> {
-            let mods: Vec<String> =
-                vec!["John".into(), "Jane".into(), "Alex".into(), "Krish".into()];
-            let mut rng = Rng::with_seed(1_000);
+        fn populate_scenario_with_custom_weights() -> Result<()> {
+            let scenario = Scenario {
+                template: "{one}, {two}, and {three} in the fruit basket.".into(),
+                winners: vec!["one".into()],
+                others: vec!["two".into(), "three".into()],
+                history: None,
+                correction_weights: Some(vec![
+                    vec![0.0, 0.0, 10.0, 0.0], // always choose 3rd into position 0
+                    vec![10.0, 0.0, 0.0, 0.0], // always choose 1st into position 1
+                    vec![0.0, 10.0, 0.0, 0.0], // always choose 2nd into position 2
+                    vec![0.0, 0.0, 0.0, 10.0], // always choose 4th into position 3
+                ]),
+            };
+            let mods: Vec<Mod> = vec![
+                Mod {
+                    name: "Apple".into(),
+                    weight: 0.25,
+                },
+                Mod {
+                    name: "Banana".into(),
+                    weight: 0.25,
+                },
+                Mod {
+                    name: "Cherry".into(),
+                    weight: 0.25,
+                },
+                Mod {
+                    name: "Date".into(),
+                    weight: 0.25,
+                },
+            ];
+            let templates = Templates {
+                scenarios: vec![scenario],
+                mods,
+            };
+            let mut rng: SmallRng = rand::SeedableRng::seed_from_u64(1000);
+            let message = Robochick::build_from_templates(&templates, &mut rng)?;
 
-            let mut result = pick_random(&mods, 2, &mut rng);
-
-            assert_eq!(result.len(), 2);
-            let first_result = result.pop().unwrap();
-            let second_result = result.pop().unwrap();
-            assert!(mods.iter().any(|e| *e == first_result));
-            assert!(mods.iter().any(|e| *e == second_result));
-            Ok(())
-        }
-
-        #[test]
-        fn pick_random_returns_empty_vec_if_n_is_zero() -> Result<()> {
-            let mods: Vec<String> =
-                vec!["John".into(), "Jane".into(), "Alex".into(), "Krish".into()];
-            let mut rng = Rng::with_seed(1_000);
-
-            let result = pick_random(&mods, 0, &mut rng);
-
-            assert!(result.is_empty());
-            Ok(())
-        }
-
-        #[test]
-        fn pick_random_returns_empty_vec_if_picking_any_amount_from_an_empty_list() -> Result<()> {
-            let mut rng = Rng::with_seed(1_000);
-            let result = pick_random::<String>(&vec![], 1, &mut rng);
-
-            assert!(result.is_empty());
+            assert_eq!(
+                "Cherry, Apple, and Banana in the fruit basket.".to_owned(),
+                message
+            );
             Ok(())
         }
 
@@ -238,10 +268,12 @@ pub mod twitch {
                 template: "{placeholder} is the expected {other_placeholder}".into(),
                 winners: vec!["placeholder".into()],
                 others: vec!["other_placeholder".into()],
+                history: None,
+                correction_weights: None,
             };
 
-            let winners: Vec<String> = vec!["This".into()];
-            let others: Vec<String> = vec!["sentence.".into()];
+            let winners = vec!["This"];
+            let others = vec!["sentence."];
 
             let result = scenario.build(&winners, &others)?;
 
@@ -256,10 +288,12 @@ pub mod twitch {
                 template: "{placeholder} is the expected {other_placeholder}".into(),
                 winners: vec!["placeholder".into()],
                 others: vec!["other_placeholder".into(), "extra_placeholder".into()],
+                history: None,
+                correction_weights: None,
             };
 
-            let winners: Vec<String> = vec!["This".into()];
-            let others: Vec<String> = vec!["sentence.".into()];
+            let winners = vec!["This"];
+            let others = vec!["sentence."];
 
             let result = scenario.build(&winners, &others);
 
@@ -273,11 +307,12 @@ pub mod twitch {
                 template: "{placeholder} is the expected {other_placeholder}".into(),
                 winners: vec!["placeholder".into(), "extra_placeholder".into()],
                 others: vec!["other_placeholder".into()],
+                history: None,
+                correction_weights: None,
             };
 
-            let winners: Vec<String> = vec!["This".into()];
-            let others: Vec<String> = vec!["sentence.".into()];
-
+            let winners = vec!["This"];
+            let others = vec!["sentence."];
             let result = scenario.build(&winners, &others);
 
             assert!(result.is_err());
@@ -290,28 +325,33 @@ pub mod twitch {
                 template: "{placeholder} wins by default.".into(),
                 winners: vec!["placeholder".into()],
                 others: vec![],
+                history: None,
+                correction_weights: None,
             }];
-            let mods: Vec<String> = vec!["John".into()];
-            let message_components = MessageComponents { scenarios, mods };
-            let mut rng = Rng::with_seed(1);
-
-            let msg = Robochick::build_from_templates(&message_components, &mut rng)?;
+            let mods = vec![Mod {
+                name: "John".into(),
+                weight: 1.0,
+            }];
+            let templates = Templates { scenarios, mods };
+            let mut rng: SmallRng = rand::SeedableRng::seed_from_u64(1_000);
+            let msg = Robochick::build_from_templates(&templates, &mut rng)?;
 
             assert_eq!(msg, "John wins by default.");
             Ok(())
         }
 
         #[test]
-        fn build_from_templates_should_return_err_if_message_components_has_no_scenarios()
-        -> Result<()> {
-            let mods: Vec<String> = vec!["John".into()];
-            let message_components = MessageComponents {
+        fn build_from_templates_should_return_err_if_templates_has_no_scenarios() -> Result<()> {
+            let mods: Vec<Mod> = vec![Mod {
+                name: "John".into(),
+                weight: 1.0,
+            }];
+            let templates = Templates {
                 scenarios: vec![],
                 mods,
             };
-            let mut rng = Rng::with_seed(1);
-
-            let result = Robochick::build_from_templates(&message_components, &mut rng);
+            let mut rng: SmallRng = rand::SeedableRng::seed_from_u64(1_000);
+            let result = Robochick::build_from_templates(&templates, &mut rng);
             assert!(result.is_err());
 
             Ok(())
@@ -324,43 +364,27 @@ pub mod twitch {
                 template: "This sentence has no placeholders as intended.".into(),
                 winners: vec![],
                 others: vec![],
+                history: None,
+                correction_weights: None,
             };
-            let mods: Vec<String> = vec!["Alice".into(), "Bob".into()];
-            let message_components = MessageComponents {
+            let mods: Vec<Mod> = vec![
+                Mod {
+                    name: "Alice".into(),
+                    weight: 0.5,
+                },
+                Mod {
+                    name: "Bob".into(),
+                    weight: 0.5,
+                },
+            ];
+            let templates = Templates {
                 scenarios: vec![scenario],
                 mods,
             };
-            let mut rng = Rng::with_seed(1);
-
-            let result = Robochick::build_from_templates(&message_components, &mut rng)?;
+            let mut rng: SmallRng = rand::SeedableRng::seed_from_u64(1_000);
+            let result = Robochick::build_from_templates(&templates, &mut rng)?;
             assert_eq!("This sentence has no placeholders as intended.", result);
 
-            Ok(())
-        }
-
-        #[test]
-        fn build_from_templates_should_ensure_mod_chosen_as_winner_is_not_chosen_as_other()
-        -> Result<()> {
-            let scenario = Scenario {
-                template: "{winner} is the winner, and a different person {other} is the loser."
-                    .into(),
-                winners: vec!["winner".into()],
-                others: vec!["other".into()],
-            };
-            let mods: Vec<String> = vec!["John".into(), "Jane".into()];
-            let message_components = MessageComponents {
-                scenarios: vec![scenario],
-                mods,
-            };
-            let mut rng: Rng = Rng::with_seed(1_000);
-
-            let result = Robochick::build_from_templates(&message_components, &mut rng)?;
-
-            // Expected message for this specific seed `1_000`
-            assert_eq!(
-                "John is the winner, and a different person Jane is the loser.",
-                result
-            );
             Ok(())
         }
     }

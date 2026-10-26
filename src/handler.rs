@@ -3,7 +3,6 @@ pub mod event_handler {
 
     use anyhow::{Context, Result, anyhow};
     use axum::http::{HeaderMap, HeaderName};
-    use fastrand::Rng;
     use hex::decode;
     use hmac::{Hmac, Mac};
     use lambda_http::{Body, Response, tracing};
@@ -18,7 +17,7 @@ pub mod event_handler {
         client::StreamelementsCaller,
         config::AppConfig,
         reward::{RewardHandler, mod_feeder::ModFeed},
-        robochick::twitch::{MessageBuilder, MessageComponents, Robochick},
+        robochick::twitch::{MessageBuilder, Robochick, Templates},
         types::twitch::{
             EventsubHeader, MessageType, RevocationEvent, RewardRedeemed, SubscriptionType,
             VerificationEvent,
@@ -219,13 +218,7 @@ pub mod event_handler {
                     timestamp.to_str(),
                     signature_val.to_str(),
                 ) {
-                    let input = format!("{}{}{}", message_id_val, timestamp_val, payload);
-
-                    let key = config.twitch_eventsub_subscription_secret.as_bytes();
-                    let mut hmac = HmacSha256::new_from_slice(key)?;
-                    hmac.update(input.as_bytes());
-
-                    let signature = match String::from(signature_val).strip_prefix("sha256=") {
+                    let signature = match signature_val.strip_prefix("sha256=") {
                         Some(s) => hex::decode(s)?,
                         None => {
                             return Err(anyhow!(
@@ -234,7 +227,12 @@ pub mod event_handler {
                         }
                     };
 
-                    match hmac.verify_slice(&signature[..]) {
+                    let input = format!("{}{}{}", message_id_val, timestamp_val, payload);
+                    let key = config.twitch_eventsub_subscription_secret.as_bytes();
+                    let mut hmac = HmacSha256::new_from_slice(key)?;
+                    hmac.update(input.as_bytes());
+
+                    match hmac.verify_slice(&signature) {
                         Ok(_) => Ok(()),
                         Err(e) => Err(anyhow!("Signature verification failed: {e}")),
                     }
@@ -249,7 +247,7 @@ pub mod event_handler {
         }
     }
 
-    fn read_config(path: &PathBuf) -> Result<MessageComponents> {
+    fn read_config(path: &PathBuf) -> Result<Templates> {
         let config_str = match std::fs::read_to_string(path) {
             Ok(text) => text,
             Err(_) => {
@@ -259,7 +257,7 @@ pub mod event_handler {
             }
         };
 
-        serde_json::from_str::<MessageComponents>(config_str.as_ref())
+        serde_json::from_str::<Templates>(config_str.as_ref())
             .map_err(|e| anyhow!("Failed to deserialize message config: {e}"))
     }
 
@@ -282,7 +280,7 @@ pub mod event_handler {
         use crate::client::StreamelementsCaller;
         use crate::config::AppConfig;
         use crate::handler::event_handler::{self, EventHandler, HmacSha256};
-        use crate::robochick::twitch::{MessageComponents, Scenario};
+        use crate::robochick::twitch::{Scenario, Templates};
         use crate::types::twitch;
 
         mock! {
@@ -301,12 +299,7 @@ pub mod event_handler {
             let timestamp = "2025-09-14T00:00:00.123456789";
             let payload = r#"{"message":"Hello, World!"}"#;
 
-            let input = format!(
-                "{}{}{}",
-                message_id.to_string(),
-                timestamp.to_string(),
-                payload.to_string()
-            );
+            let input = format!("{}{}{}", message_id, timestamp, payload);
             let signature = generate_hmac(&input, &config.twitch_eventsub_subscription_secret)?;
 
             let mut headers = HeaderMap::new();
@@ -339,7 +332,7 @@ pub mod event_handler {
             let timestamp = "2025-09-14T00:00:00.123456789";
             let payload = r#"{"message":"Hello, World!"}"#;
 
-            let input = format!("{}{}", timestamp.to_string(), payload.to_string());
+            let input = format!("{}{}", timestamp, payload);
             let signature = generate_hmac(&input, &config.twitch_eventsub_subscription_secret)?;
 
             let mut headers_without_msg_id = HeaderMap::new();
@@ -369,7 +362,7 @@ pub mod event_handler {
             let timestamp = "2025-09-14T00:00:00.123456789";
             let payload = r#"{"message":"Hello, World!"}"#;
 
-            let input = format!("{}{}", timestamp.to_string(), payload.to_string());
+            let input = format!("{}{}", timestamp, payload);
             let signature = hex::encode("random data");
 
             let mut headers = HeaderMap::new();
@@ -406,12 +399,7 @@ pub mod event_handler {
             payload_path.push("resources/tests/challenge_request.json");
             let payload = std::fs::read_to_string(payload_path)?;
 
-            let input = format!(
-                "{}{}{}",
-                message_id.to_string(),
-                timestamp.to_string(),
-                payload.to_string()
-            );
+            let input = format!("{}{}{}", message_id, timestamp, payload);
             let signature = generate_hmac(&input, &config.twitch_eventsub_subscription_secret)?;
 
             let mut headers = HeaderMap::new();
@@ -468,12 +456,7 @@ pub mod event_handler {
             payload_path.push("resources/tests/subscription_revoked.json");
             let payload = std::fs::read_to_string(payload_path)?;
 
-            let input = format!(
-                "{}{}{}",
-                message_id.to_string(),
-                timestamp.to_string(),
-                payload.to_string()
-            );
+            let input = format!("{}{}{}", message_id, timestamp, payload);
             let signature = generate_hmac(&input, &config.twitch_eventsub_subscription_secret)?;
 
             let mut headers = HeaderMap::new();
@@ -511,7 +494,7 @@ pub mod event_handler {
             let hmac = mac.finalize();
 
             let encoded_hmac = hex::encode(hmac.into_bytes());
-            Ok(format!("sha256={}", &encoded_hmac))
+            Ok(format!("sha256={}", encoded_hmac))
         }
     }
 }

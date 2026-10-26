@@ -2,13 +2,13 @@ use super::RewardHandler;
 use crate::{
     client::StreamelementsCaller,
     config::AppConfig,
-    robochick::twitch::{MessageBuilder, MessageComponents, Robochick},
+    robochick::twitch::{MessageBuilder, Robochick, Templates},
     types::twitch::RewardRedeemed,
 };
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
-use fastrand::Rng;
 use lambda_http::tracing;
+use rand::rngs::SmallRng;
 use std::path::PathBuf;
 
 pub struct ModFeed<C: StreamelementsCaller> {
@@ -23,8 +23,8 @@ impl<C: StreamelementsCaller> RewardHandler for ModFeed<C> {
         redeem: &RewardRedeemed,
         config: &AppConfig,
     ) -> Result<()> {
-        let msg_config_path = PathBuf::from(config.message_components_config_path.clone());
-        let message_components: MessageComponents = match read_config(&msg_config_path) {
+        let template_path = PathBuf::from(config.templates_config_path.clone());
+        let templates: Templates = match read_config(&template_path) {
             Ok(m) => m,
             Err(e) => {
                 tracing::error!(err = %e, "Error reading message configuration file");
@@ -32,8 +32,8 @@ impl<C: StreamelementsCaller> RewardHandler for ModFeed<C> {
             }
         };
 
-        let mut rng: Rng = Rng::new();
-        let message = match Robochick::build_from_templates(&message_components, &mut rng) {
+        let mut rng: SmallRng = rand::make_rng();
+        let message = match Robochick::build_from_templates(&templates, &mut rng) {
             Ok(m) => m,
             Err(e) => {
                 tracing::error!(err = %e, "Failed to build message");
@@ -42,7 +42,7 @@ impl<C: StreamelementsCaller> RewardHandler for ModFeed<C> {
         };
 
         tracing::info!("Message built");
-        return match self.client.say(&message, config).await {
+        match self.client.say(&message, config).await {
             Ok(resp) => {
                 tracing::info!("Successfully posted message in chat!");
                 Ok(())
@@ -51,11 +51,11 @@ impl<C: StreamelementsCaller> RewardHandler for ModFeed<C> {
                 tracing::error!(err = %e, "Streamelements API request failed");
                 Ok(())
             }
-        };
+        }
     }
 }
 
-fn read_config(path: &PathBuf) -> Result<MessageComponents> {
+fn read_config(path: &PathBuf) -> Result<Templates> {
     let config_str = match std::fs::read_to_string(path) {
         Ok(text) => text,
         Err(_) => {
@@ -65,7 +65,7 @@ fn read_config(path: &PathBuf) -> Result<MessageComponents> {
         }
     };
 
-    serde_json::from_str::<MessageComponents>(config_str.as_ref())
+    serde_json::from_str::<Templates>(config_str.as_ref())
         .map_err(|e| anyhow!("Failed to deserialize message config: {e}"))
 }
 
