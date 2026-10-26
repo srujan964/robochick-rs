@@ -176,7 +176,7 @@ pub mod twitch {
         } else {
             picks.extend(templates.mods.sample(rng, amount).map(|m| m.name.as_str()));
         }
-        tracing::info!(?picks, templates = %scenario.template, "Picks made");
+        tracing::info!(?picks, template = %scenario.template, "Picks made");
 
         scenario.build(&picks[..m], &picks[m..])
     }
