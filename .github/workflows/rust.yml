@@ -70,12 +70,12 @@ jobs:
           role-session-name: ${{ github.run_id }}
       - name: Fetch configuration file
         run: |
-          aws s3 cp s3://${{ secrets.BUCKET_NAME }}/${{ secrets.CONFIG_S3_OBJECT_NAME }} message_components.json
+          aws s3 cp s3://${{ secrets.BUCKET_NAME }}/${{ secrets.CONFIG_S3_OBJECT_NAME }} templates.json
       - name: Cross compile to arm64
         run: |
           cargo lambda build --release --arm64 \
             --output-format zip \
-            --include message_components.json
+            --include templates.json
       - name: Deploy lambda function
         run: |
           aws lambda update-function-code \
