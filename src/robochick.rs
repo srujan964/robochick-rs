@@ -195,6 +195,7 @@ pub mod twitch {
                 others: vec![],
                 history: None,
                 correction_weights: None,
+                latest_correction_at: None,
             };
             let mods: Vec<Mod> = vec![
                 Mod {
@@ -230,6 +231,7 @@ pub mod twitch {
                     vec![0.0, 10.0, 0.0, 0.0], // always choose 2nd into position 2
                     vec![0.0, 0.0, 0.0, 10.0], // always choose 4th into position 3
                 ]),
+                latest_correction_at: None,
             };
             let mods: Vec<Mod> = vec![
                 Mod {
@@ -271,6 +273,7 @@ pub mod twitch {
                 others: vec!["other_placeholder".into()],
                 history: None,
                 correction_weights: None,
+                latest_correction_at: None,
             };
 
             let winners = vec!["This"];
@@ -291,6 +294,7 @@ pub mod twitch {
                 others: vec!["other_placeholder".into(), "extra_placeholder".into()],
                 history: None,
                 correction_weights: None,
+                latest_correction_at: None,
             };
 
             let winners = vec!["This"];
@@ -310,6 +314,7 @@ pub mod twitch {
                 others: vec!["other_placeholder".into()],
                 history: None,
                 correction_weights: None,
+                latest_correction_at: None,
             };
 
             let winners = vec!["This"];
@@ -328,6 +333,7 @@ pub mod twitch {
                 others: vec![],
                 history: None,
                 correction_weights: None,
+                latest_correction_at: None,
             }];
             let mods = vec![Mod {
                 name: "John".into(),
@@ -367,6 +373,7 @@ pub mod twitch {
                 others: vec![],
                 history: None,
                 correction_weights: None,
+                latest_correction_at: None,
             };
             let mods: Vec<Mod> = vec![
                 Mod {
