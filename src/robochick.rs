@@ -28,6 +28,7 @@ pub mod twitch {
         pub(crate) others: Vec<String>,
         pub(crate) history: Option<Vec<Vec<u64>>>,
         pub(crate) correction_weights: Option<Vec<Vec<f64>>>,
+        pub(crate) latest_correction_at: Option<i64>,
     }
 
     #[derive(Debug)]
