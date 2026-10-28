@@ -1,28 +1,26 @@
 use std::collections::HashMap;
 
-use anyhow::anyhow;
-use aws_config::{BehaviorVersion, meta::region::RegionProviderChain};
+use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_dynamodb::Client;
+use axum::extract::State;
 use axum::{
     Router,
-    extract::{Query, Request, State},
+    extract::Query,
     http::HeaderMap,
     routing::{get, post},
 };
 use lambda_http::{
     Body, Error, Response,
-    tracing::{self, instrument, subscriber},
+    tracing::{self, subscriber},
 };
 use reqwest::{StatusCode, Url};
-use tokio::sync::OnceCell;
 
-use robochick_rs::{
+use robochick_events::{
     auth,
     client::WebClient,
     config::AppConfig,
     handler::event_handler::EventHandler,
     reward::{ducks::DuckRedeemed, mod_feeder::ModFeed},
-    robochick::twitch::MessageBuilder,
 };
 
 #[derive(Clone)]
@@ -51,7 +49,7 @@ async fn oauth_handler(
     State(state): State<AppState>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Response<Body> {
-    if let (Some(code), Some(scope)) = (params.get("code"), params.get("scope")) {
+    if let (Some(code), Some(_scope)) = (params.get("code"), params.get("scope")) {
         let url_base = format!("{}/oauth2/token", state.config.twitch_host);
         let req_params = [
             ("client_id", state.config.twitch_client_id),
@@ -78,7 +76,7 @@ async fn oauth_handler(
 
         let oauth_response = match resp.text().await {
             Ok(response) => response,
-            Err(e) => {
+            Err(_e) => {
                 tracing::error!("Error decoding data from oauth API response");
                 return Response::builder()
                     .status(StatusCode::INTERNAL_SERVER_ERROR)
@@ -204,8 +202,7 @@ async fn main() -> Result<(), Error> {
 mod tests {
     use anyhow::Result;
     use dotenvy::dotenv;
-
-    use robochick_rs::config::AppConfig;
+    use robochick_events::config::AppConfig;
 
     #[test]
     fn from_env_creates_config() -> Result<()> {

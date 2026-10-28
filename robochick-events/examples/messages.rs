@@ -3,7 +3,7 @@ use std::{path::PathBuf, time::Instant};
 use anyhow::{Context, Result, anyhow};
 
 use rand::{Rng, rngs::SmallRng};
-use robochick_rs::robochick::twitch::{MessageBuilder, Robochick, Templates};
+use robochick_events::robochick::twitch::{MessageBuilder, Robochick, Templates};
 
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();

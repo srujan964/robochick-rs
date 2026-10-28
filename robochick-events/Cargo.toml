@@ -1,0 +1,44 @@
+[package]
+name = "robochick-events"
+version = "1.0.4"
+edition = "2024"
+
+[dependencies]
+async-trait = "0.1.89"
+aws-sdk-secretsmanager = { version = "1.108.0"}
+axum = "0.8.4"
+hex = "0.4.3"
+hmac = "0.12.1"
+lambda_http = "1.2.1"
+rand = "0.10.3"
+reqwest = { version = "0.13.4", default-features = false, features = [
+    "json",
+    "rustls"
+] }
+sha2 = "0.10.9"
+strfmt = "0.2.5"
+strum = { version = "0.27.2", features = ["derive"] }
+
+# Inherited from workspace
+anyhow = { workspace = true }
+aws-config = { version = "1.13.0", default-features = false, features = [
+    "behavior-version-latest",
+    "rustls"
+] }
+chrono = { workspace = true }
+serde = { workspace = true}
+serde_json = { workspace = true }
+tokio = { workspace = true }
+aws-sdk-dynamodb = { workspace = true, features = ["test-util"] }
+
+[dev-dependencies]
+aws-sdk-dynamodb.workspace = true
+tokio.workspace = true
+aws-smithy-mocks.workspace = true
+dotenvy.workspace = true
+pretty_assertions.workspace = true
+mockall.workspace = true
+mockito.workspace = true
+
+[lints]
+workspace = true

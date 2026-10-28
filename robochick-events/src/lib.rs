@@ -83,7 +83,6 @@ pub mod config {
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
-    use dotenvy::dotenv;
 
     use crate::config::AppConfig;
 
