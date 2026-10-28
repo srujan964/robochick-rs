@@ -31,7 +31,9 @@ jobs:
     - name: Cache deps
       uses: Swatinem/rust-cache@v2
     - name: Check formatting
-      run: cargo fmt --check
+      run: |
+        cargo fmt --check -p robochick-events
+        cargo fmt --check -p lifejacket
     - name: Run cargo check
       run: cargo check --locked
     - name: Run clippy
