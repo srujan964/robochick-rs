@@ -75,13 +75,14 @@ jobs:
       - name: Cross compile to arm64
         run: |
           cargo lambda build --release --arm64 \
+            --package robochick-events \
             --output-format zip \
             --include templates.json
       - name: Deploy lambda function
         run: |
           aws lambda update-function-code \
             --function-name robochick \
-            --zip-file fileb://./target/lambda/robochick-rs/bootstrap.zip \
+            --zip-file fileb://./target/lambda/robochick-events/bootstrap.zip \
             --region ${{ secrets.AWS_REGION }} > /dev/null 2>& 1
 
 name: Rust
